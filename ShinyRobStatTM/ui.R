@@ -127,43 +127,92 @@ shinyUI(navbarPage("Robust Statistics: Theory and Methods",
   ),
   
   # Tab to choose parameters
-  tabPanel("Parameter Selection",
-    sidebarLayout(
-      sidebarPanel(
-        tags$head(tags$style(HTML(CSS.format1))),
-        tags$head(tags$script(HTML(JS.log10))),
-        tags$head(tags$script(HTML(JS.onCall))),
+  
+  navbarMenu("Parameter Selection",
+    tabPanel("Location",
+      sidebarLayout(
+        sidebarPanel(
+          tags$head(tags$style(HTML(CSS.format1))),
+          tags$head(tags$script(HTML(JS.log10))),
+          tags$head(tags$script(HTML(JS.onCall))),
+          
+          # Renders selection of univariate vectors chosen from
+          # dataset
+          uiOutput("select.variable"),
+          
+          # Selection of score function family
+          selectInput("psi", "Score Function (Psi)",
+                      choices = c("bi-square" = "Bis",
+                                  "Huber"     = "Hub")),
+          
+          # Radio buttons for desired asymptotic efficiency
+          radioButtons("efficiency", "Asymptotic Efficiency",
+                       choices  = c("0.85", "0.9", "0.95"),
+                       selected = "0.9"),
+          
+          # Slider for maximum number of iterations
+          sliderInput("max.iter", "Maximum Iterations",
+                      min = 10, max = 100, value = 50),
+          
+          # Slider for tolerance level of convergence
+          sliderInput("tolerance", "Error Tolerance",
+                      min = -16, max = -3, value = -4),
+           # Button to display data table when pressed
+          actionButton("display.estimates", "View Output")
+        ),
         
-        # Renders selection of univariate vectors chosen from
-        # dataset
-        uiOutput("select.variable"),
+        mainPanel(
+          tags$head(tags$style(HTML(CSS.format1))),
+          # Display values for location and scale estimators
+          verbatimTextOutput("estimates")
+        )
+      )
+    ),
+    
+    tabPanel("Scale",
+      sidebarLayout(
+        sidebarPanel(
+          tags$head(tags$style(HTML(CSS.format1))),
+          tags$head(tags$script(HTML(JS.log10))),
+          tags$head(tags$script(HTML(JS.onCall))),
+          
+          # Renders selection of univariate vectors chosen from
+          # dataset
+          uiOutput("select.variable"),
+          
+          # Selection of score function family
+          selectInput("psi", "Score Function (Psi)",
+                      choices = c("bi-square" = "Bis",
+                                  "Huber"     = "Hub")),
+          
+          # Radio buttons for desired asymptotic efficiency
+          radioButtons("efficiency", "Asymptotic Efficiency",
+                       choices  = c("0.85", "0.9", "0.95"),
+                       selected = "0.9"),
+          
+          # Slider for maximum number of iterations
+          sliderInput("max.iter", "Maximum Iterations",
+                      min = 10, max = 100, value = 50),
+          
+          # Slider for tolerance level of convergence
+          sliderInput("tolerance", "Error Tolerance",
+                      min = -16, max = -3, value = -4),
+           # Button to display data table when pressed
+          actionButton("display.estimates", "View Output")
+        ),
         
-        # Selection of score function family
-        selectInput("psi", "Score Function (Psi)",
-                    choices = c("bi-square" = "Bis",
-                                "Huber"     = "Hub")),
-        
-        # Radio buttons for desired asymptotic efficiency
-        radioButtons("efficiency", "Asymptotic Efficiency",
-                     choices  = c("0.85", "0.9", "0.95"),
-                     selected = "0.9"),
-        
-        # Slider for maximum number of iterations
-        sliderInput("max.iter", "Maximum Iterations",
-                    min = 10, max = 100, value = 50),
-        
-        # Slider for tolerance level of convergence
-        sliderInput("tolerance", "Error Tolerance",
-                    min = -16, max = -3, value = -4),
-         # Button to display data table when pressed
-        actionButton("display.estimates", "View Output")
-      ),
-      
-      mainPanel(
-        tags$head(tags$style(HTML(CSS.format1))),
-        # Display values for location and scale estimators
-        verbatimTextOutput("estimates")
+        mainPanel(
+          tags$head(tags$style(HTML(CSS.format1))),
+          # Display values for location and scale estimators
+          verbatimTextOutput("estimates")
+        )
       )
     )
+  ),
+  
+  navbarMenu("Linear Regression",
+    tabPanel("Model"),
+    tabPanel("Plots"),
+    tabPanel("Predict")
   )
 ))

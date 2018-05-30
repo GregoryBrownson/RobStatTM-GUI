@@ -7,6 +7,9 @@
 #              selecting location and scale
 #              parameters
 
+# Command To Run:
+#   shiny::runGitHub("RobStatTM-Gui", "GregoryBrownson", subdir = "ShinyRobStatTM", ref = 'dev')
+
 library(DT)
 library(shiny)
 
@@ -55,7 +58,8 @@ $(document).ready(function() {
   setTimeout(function() {
     // Include call for each slider input
     log10('tolerance')
-  }, 5)})
+  }, 5)
+})
 "
 
 # Define UI for Shiny Application
@@ -176,6 +180,33 @@ shinyUI(navbarPage("RobStatTM",
             sidebarPanel(
               tags$head(tags$style(HTML(CSS.format1))),
               tags$head(tags$script(HTML(JS.log10))),
+              tags$head(tags$script(HTML(JS.onCall))),
+              
+              radioButtons("fit.option", "Regression Estimator",
+                           choiceValues = c("lm.LS", "lm.M", "lm.MM", "lm.DCML", "lm.S"),
+                           choiceNames = c("Least Squares", "M", "MM", "Distance Constrained", "S"),
+                           selected = "lm.MM"),
+              
+              uiOutput("select.dependent"),
+              
+              uiOutput("select.independent"),
+              
+              uiOutput("formula")
+            ),
+            
+            mainPanel(
+              tags$head(tags$style(HTML(CSS.format1))),
+              
+              verbatimTextOutput("results")
+            )
+          )
+        ),
+        
+        tabPanel("Results",
+          sidebarLayout(
+            sidebarPanel(
+              tags$head(tags$style(HTML(CSS.format1))),
+              tags$head(tags$script(HTML(JS.log10))),
               tags$head(tags$script(HTML(JS.onCall)))
             ),
             mainPanel(
@@ -183,8 +214,19 @@ shinyUI(navbarPage("RobStatTM",
             )
           )
         ),
-        tabPanel("Results"),
-        tabPanel("Plots")
+        
+        tabPanel("Plots",
+          sidebarLayout(
+            sidebarPanel(
+              tags$head(tags$style(HTML(CSS.format1))),
+              tags$head(tags$script(HTML(JS.log10))),
+              tags$head(tags$script(HTML(JS.onCall)))
+            ),
+            mainPanel(
+              tags$head(tags$style(HTML(CSS.format1)))
+            )
+          )
+        )
       )
     )
   )

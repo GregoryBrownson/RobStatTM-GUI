@@ -19,6 +19,10 @@ shinyServer(function(input, output) {
   # Need this to store reactive objects
   values <- reactiveValues()
   
+####################  
+## Data Selection ##
+####################
+  
   # Display correct options to obtain data given
   # method selected by user
   output$select.data <- renderUI({
@@ -80,7 +84,11 @@ shinyServer(function(input, output) {
     contents_table()
   })
   
-  # Render variable input list
+####################
+## Location/Scale ##
+####################
+
+    # Render variable input list
   output$select.variable <- renderUI({
     # If there is no data, do nothing
     if (is.null(dim(values$dat))) {
@@ -103,15 +111,66 @@ shinyServer(function(input, output) {
                    tol   = input$tolerance)
     
     # Store results in string objects
-    line1 <- paste0("Location estimate: ", round(est$mu, 4))
-    line2 <- paste0("Scale estimate:    ", round(est$disper, 4))
-    line3 <- paste0("Standard deviation of location: ", round(est$std.mu, 4))
+    line1 <- paste0("Location (Error): ", round(est$mu, 4), " (", round(est$std.mu, 4), ")")
+    line2 <- paste0("      Dispersion: ", round(est$disper, 4))
 
-    return(paste(line1, line2, "", line3, sep = "\n"))
+    return(paste(line1, line2, sep = "\n"))
   })
   
   # Display output
   output$estimates <- renderText({
     contents_estimators()
+  })
+#########################
+## Linear Regression I ##
+#########################
+
+  output$select.dependent <- renderUI({
+    # If there is no data, do nothing
+    if (is.null(dim(values$dat))) {
+      return()
+    }
+    
+    # Render select input for variables
+    selectInput("dependent.var", "Dependent",
+                choices = values$dat.variables)
+  })
+
+  output$select.independent <- renderUI({
+    # If no dependent variable is selected, do nothing
+    if (is.null(input$dependent.var)) {
+      return()
+    }
+    
+    ind.vars <- setdiff(values$dat.variables, input$dependent.var)
+    
+    # Render select input for variables
+    selectInput("independent.var", "Independent",
+                choices = ind.vars,
+                selected = ind.vars,
+                multiple = TRUE)
+  })
+  
+  output$formula <- renderUI({
+    if (is.null(input$dependent.var)) {
+      return()
+    }
+    
+    formula.str <- paste(input$dependent.var, " ~ ")
+    
+    ind.vars <- input$independent.var
+    
+    n <- length(ind.vars)
+    
+    if (n > 1) {
+      for (i in 1:(n - 1)) {
+        formula.str <- paste(formula.str, ind.vars[i], " + ")
+      }
+    }
+    
+    formula.str <- paste(formula.str, ind.vars[n])
+    
+    textInput("formula.text", "Formula",
+              formula.str)
   })
 })

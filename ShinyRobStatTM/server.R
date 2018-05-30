@@ -11,9 +11,7 @@ library(DT)
 library(RobStatTM)
 library(shiny)
 
-
-
-# Define server logic required to draw a histogram
+# Back-end implementation of Shiny server
 shinyServer(function(input, output) {
   
   # Need this to store reactive objects

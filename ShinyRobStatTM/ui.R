@@ -204,7 +204,7 @@ shinyUI(navbarPage("RobStatTM",
               tags$head(tags$script(HTML(JS.onCall))),
               
               selectizeInput("fit.option", "Method",
-                           choices = c("Least Squares", "M", "MM", "Distance Constrained", "S"),
+                           choices = c("Least Squares", "M", "MM", "Distance Constrained"),
                            selected = c("MM", "Least Squares"),
                            options = list(maxItems = 2)),
               

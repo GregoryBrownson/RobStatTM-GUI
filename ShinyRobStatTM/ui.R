@@ -62,10 +62,22 @@ $(document).ready(function() {
 })
 "
 
+JS.keyPress <-
+"
+$(function(){ 
+  $(document).keyup(function(e) {
+    if (e.which == 81) {
+      $('#button').click()
+    }
+  });
+})
+"
+
 # Define UI for Shiny Application
 shinyUI(navbarPage("RobStatTM",
   
   # Tab to choose a data set
+  
   tabPanel("Data",
     sidebarLayout(
       sidebarPanel(
@@ -74,7 +86,8 @@ shinyUI(navbarPage("RobStatTM",
         # Radio buttons to select data source
         radioButtons("source", "Data Source",
                      choices = c(Upload      = "upload",
-                                 "R Package" = "library")),
+                                 "R Package" = "library"),
+                     selected = "library"),
         # Create panel for uploading data
         conditionalPanel(
           condition = "input.source == 'upload'",
@@ -109,8 +122,9 @@ shinyUI(navbarPage("RobStatTM",
           condition = "input.source == 'library'",
           # Selection of R packages
           selectInput("library", "Library Name",
-                       choices = c(robustbase = "robustbase",
-                                   RobStatTM  = "RobStatTM")),
+                      choices = c(RobStatTM  = "RobStatTM",
+                                  robustbase = "robustbase"),
+                      selected = "RobStatTM"),
           
           # Render UI given package selected
           uiOutput("select.data")
@@ -130,7 +144,7 @@ shinyUI(navbarPage("RobStatTM",
     )
   ),
   
-  # Tab to choose parameters
+  # Tab for Location/Dispersion
   
   tabPanel("Location",
     sidebarLayout(
@@ -160,21 +174,28 @@ shinyUI(navbarPage("RobStatTM",
         # Slider for tolerance level of convergence
         sliderInput("tolerance", "Error Tolerance",
                     min = -16, max = -3, value = -4),
-         # Button to display data table when pressed
-        actionButton("display.estimates", "View Output")
+        
+        # Button to display estimates for location and scale when pressed
+        actionButton("display.Location", "Results")
       ),
       
       mainPanel(
         tags$head(tags$style(HTML(CSS.format1))),
         # Display values for location and scale estimators
-        verbatimTextOutput("estimates")
+        verbatimTextOutput("results.Location")
       )
     )
   ),
   
+  # Tab to select from list of models
+  
   navbarMenu("Models",
-    tabPanel("Linear Regression I",
+             
+    ## Linear Regression ##
+    tabPanel("Linear Regression",
       tabsetPanel(type = "tabs",
+                  
+        # Model selection
         tabPanel("Model",
           sidebarLayout(
             sidebarPanel(
@@ -182,51 +203,72 @@ shinyUI(navbarPage("RobStatTM",
               tags$head(tags$script(HTML(JS.log10))),
               tags$head(tags$script(HTML(JS.onCall))),
               
-              radioButtons("fit.option", "Regression Estimator",
-                           choiceValues = c("lm.LS", "lm.M", "lm.MM", "lm.DCML", "lm.S"),
-                           choiceNames = c("Least Squares", "M", "MM", "Distance Constrained", "S"),
-                           selected = "lm.MM"),
+              selectizeInput("fit.option", "Method",
+                           choices = c("Least Squares", "M", "MM", "Distance Constrained", "S"),
+                           selected = c("MM", "Least Squares"),
+                           options = list(maxItems = 2)),
               
-              uiOutput("select.dependent"),
+              # List of dependent variables, must be selected
+              uiOutput("select.dependent.LinRegress"),
               
-              uiOutput("select.independent"),
+              # List of predictors to choose from
+              uiOutput("select.independent.LinRegress"),
               
-              uiOutput("formula")
+              # String representing regression formula of form Y ~ X_0 + ... + X_n
+              uiOutput("formula.LinRegress"),
+        
+              # Button to run selected regression
+              actionButton("display.LinRegress", "Results")
             ),
             
             mainPanel(
               tags$head(tags$style(HTML(CSS.format1))),
               
-              verbatimTextOutput("results")
+              verbatimTextOutput("results.LinRegress")
             )
           )
         ),
         
-        tabPanel("Results",
-          sidebarLayout(
-            sidebarPanel(
-              tags$head(tags$style(HTML(CSS.format1))),
-              tags$head(tags$script(HTML(JS.log10))),
-              tags$head(tags$script(HTML(JS.onCall)))
+        # Plot selection
+        tabPanel("Plotting",
+          fluidRow(
+            column(4,
+              wellPanel(
+                h3("Plots"),
+                checkboxInput("residual.fit", "Residuals v. Fit", TRUE),
+                checkboxInput("response.fit", "Response v. Fit", FALSE),
+                checkboxInput("qq", "Residuals Normal QQ Plot", TRUE),
+                checkboxInput("stdResidual.RobustDist", "Std. Residuals v. Robust Distances", TRUE),
+                checkboxInput("residual.density", "Estimated Residual Density", TRUE),
+                checkboxInput("stdResidual.Index", "Std. Residuals v. Index (Time)", TRUE)
+              )
             ),
-            mainPanel(
-              tags$head(tags$style(HTML(CSS.format1)))
+            
+            column(4,
+              wellPanel(
+                h3("Options"),
+                checkboxInput("include.smooth", "Residuals v. Fit", TRUE),
+                checkboxInput("include.rugplot", "Response v. Fit", FALSE),
+                checkboxInput("qq.env", "Residuals Normal QQ Plot", TRUE),
+                checkboxInput("qqline.robust", "Std. Residuals v. Robust Distances", TRUE),
+                checkboxInput("qq.halfnorm", "Estimated Residual Density", FALSE),
+                uiOutput("extreme.points")
+              )
+            )
+          ),
+            
+          fluidRow(
+            column(4,
+              wellPanel(
+                h3("Overlaid Plots"),
+                checkboxInput("overlaid.qq", "Residuals Normal QQ", TRUE),
+                checkboxInput("overlaid.residual.density", "Estimated Residual Density", FALSE)
+              )
             )
           )
         ),
-        
-        tabPanel("Plots",
-          sidebarLayout(
-            sidebarPanel(
-              tags$head(tags$style(HTML(CSS.format1))),
-              tags$head(tags$script(HTML(JS.log10))),
-              tags$head(tags$script(HTML(JS.onCall)))
-            ),
-            mainPanel(
-              tags$head(tags$style(HTML(CSS.format1)))
-            )
-          )
-        )
+          
+        tabPanel("Predict")
       )
     )
   )

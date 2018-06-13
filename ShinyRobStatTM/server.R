@@ -26,14 +26,14 @@ shinyServer(function(input, output) {
   output$select.data <- renderUI({
     # If no package is chosen, then do nothing
     if(is.null(input$library)) {
-      return()
+      return("")
     }
     
     # List of datasets
-    list <- data(package=input$library)$results[,"Item"]
+    list <- data(package = input$library)$results[, "Item"]
     
     # Get info on datasets
-    values$data.info <- vcdExtra::datasets(c("robustbase"))
+    values$data.info <- vcdExtra::datasets(input$library)
     
     # Create selection for datasets
     selectInput("dataset",
@@ -57,8 +57,6 @@ shinyServer(function(input, output) {
       {
         colnames(dat)[-1] <- paste0('X', 1:(ncol(dat) - 1))
       }
-      
-      
     } else {
       # If no dataset exists, return nothing
       if (is.null(input$dataset)) {
@@ -90,7 +88,7 @@ shinyServer(function(input, output) {
   output$select.variable <- renderUI({
     # If there is no data, do nothing
     if (is.null(dim(values$dat))) {
-      return()
+      return("")
     }
     
     # Render select input for variables
@@ -99,7 +97,11 @@ shinyServer(function(input, output) {
   })
   
   # On-click, find the estimators and create string object of results
-  contents_estimators <- eventReactive(input$display.estimates, {
+  contents_estimators <- eventReactive(input$display.Location, {
+    if (is.null(dim(values$dat))) {
+      return("ERROR: No data. Please upload a data set or select one from the available libraries.")
+    }
+    
     # Get values for location and scale using 'MLocDis' function from
     # 'RobStatTM' package
     est <- MLocDis(x     = as.numeric(values$dat[,input$variable]),
@@ -116,47 +118,53 @@ shinyServer(function(input, output) {
   })
   
   # Display output
-  output$estimates <- renderText({
+  output$results.Location <- renderText({
     contents_estimators()
   })
+  
 #########################
 ## Linear Regression I ##
 #########################
+  
+  ## Running Regression ##
+  
+  values$regress.methods <- c("Least Squares", "M", "MM", "Distance Constrained", "S")
+  values$regress.models  <- list(lm, lmrobM, lmrobdetMM, lmrobdetDCML, lmrob.S)
 
-  output$select.dependent <- renderUI({
+  output$select.dependent.LinRegress <- renderUI({
     # If there is no data, do nothing
     if (is.null(dim(values$dat))) {
-      return()
+      return("")
     }
     
     # Render select input for variables
-    selectInput("dependent.var", "Dependent",
+    selectInput("dependent.var.LinRegress", "Dependent",
                 choices = values$dat.variables)
   })
 
-  output$select.independent <- renderUI({
+  output$select.independent.LinRegress <- renderUI({
     # If no dependent variable is selected, do nothing
-    if (is.null(input$dependent.var)) {
-      return()
+    if (is.null(input$dependent.var.LinRegress)) {
+      return("")
     }
     
-    ind.vars <- setdiff(values$dat.variables, input$dependent.var)
+    ind.vars <- setdiff(values$dat.variables, input$dependent.var.LinRegress)
     
     # Render select input for variables
-    selectInput("independent.var", "Independent",
+    selectInput("independent.var.LinRegress", "Independent",
                 choices = ind.vars,
                 selected = ind.vars,
                 multiple = TRUE)
   })
   
-  output$formula <- renderUI({
-    if (is.null(input$dependent.var)) {
-      return()
+  output$formula.LinRegress <- renderUI({
+    if (is.null(input$dependent.var.LinRegress)) {
+      return("")
     }
     
-    formula.str <- paste(input$dependent.var, " ~ ")
+    formula.str <- paste(input$dependent.var.LinRegress, " ~ ")
     
-    ind.vars <- input$independent.var
+    ind.vars <- input$independent.var.LinRegress
     
     n <- length(ind.vars)
     
@@ -170,5 +178,65 @@ shinyServer(function(input, output) {
     
     textInput("formula.text", "Formula",
               formula.str)
+  })
+  
+  run_regression <- eventReactive(input$display.LinRegress, {
+    index <- match(input$fit.option, values$regress.methods)
+    
+    n <- length(index)
+    
+    model <- lapply(index,
+                    function(i, model.list) {
+                      model.list[[i]]
+                    },
+                    values$regress.models)
+    
+    fit <- vector(mode = "list", length = length(index))
+    
+    fit[[1]] <- model[[1]](as.formula(input$formula.text), data = values$dat)
+    
+    
+    if (length(index) == 2) {
+      fit[[2]] <- model[[2]](as.formula(input$formula.text), data = values$dat)
+    }
+    
+    return(fit)
+  })
+  
+  invalid_response <- eventReactive(input$display.LinRegress, {
+    return(paste("ERROR: Response variable is of",
+                 class(values$dat[, input$dependent.var.LinRegress]),
+                 "type. Please select a response variable with numeric values"))
+  })
+  
+  output$results.LinRegress <- renderPrint({
+    if (is.numeric(values$dat[, input$dependent.var.LinRegress])) {
+      fit <- run_regression()
+    
+      print(summary(fit[[1]]))
+    
+      if (length(fit) == 2) {
+        print(summary(fit[[2]]))
+      }
+      
+      print("fin")
+    } else {
+      invalid_response()
+    }
+  })
+  
+  ## Plotting ##
+  
+  output$extreme.points <- renderUI({
+    if (is.null(dim(values$dat))) {
+      return("")
+    }
+    
+    num.obs <- nrow(values$dat)
+    
+    numericInput("num.extreme.points",
+                 "Number of Extreme Points to Identify",
+                 value = 0,
+                 max = num.obs)
   })
 })

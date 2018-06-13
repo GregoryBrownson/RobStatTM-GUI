@@ -128,8 +128,8 @@ shinyServer(function(input, output) {
   
   ## Running Regression ##
   
-  values$regress.methods <- c("Least Squares", "M", "MM", "Distance Constrained", "S")
-  values$regress.models  <- list(lm, lmrobM, lmrobdetMM, lmrobdetDCML, lmrob.S)
+  values$regress.methods <- c("Least Squares", "M", "MM", "Distance Constrained")
+  values$regress.models  <- list(lm, lmrobM, lmrobdetMM, lmrobdetDCML)
 
   output$select.dependent.LinRegress <- renderUI({
     # If there is no data, do nothing

@@ -246,7 +246,6 @@ shinyServer(function(input, output) {
                  value = 0,
                  max = num.obs)
   })
-<<<<<<< HEAD
   
   observeEvent(input$display.plots, {
     plots <- vector(mode = "list")
@@ -476,6 +475,3 @@ shinyServer(function(input, output) {
     }
   })
 })
-=======
-})
->>>>>>> 1ce86ea27abc9ca2c91e56f9bbae7530a12847bb

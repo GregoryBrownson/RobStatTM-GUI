@@ -8,6 +8,7 @@
 #              parameters
 
 library(DT)
+library(ggplot2)
 library(RobStatTM)
 library(shiny)
 
@@ -128,8 +129,8 @@ shinyServer(function(input, output) {
   
   ## Running Regression ##
   
-  values$regress.methods <- c("Least Squares", "M", "MM", "Distance Constrained", "S")
-  values$regress.models  <- list(lm, lmrobM, lmrobdetMM, lmrobdetDCML, lmrob.S)
+  values$regress.methods <- c("Least Squares", "M", "MM", "Distance Constrained")
+  values$regress.models  <- list(lm, lmrobM, lmrobdetMM, lmrobdetDCML)
 
   output$select.dependent.LinRegress <- renderUI({
     # If there is no data, do nothing
@@ -213,13 +214,19 @@ shinyServer(function(input, output) {
     if (is.numeric(values$dat[, input$dependent.var.LinRegress])) {
       fit <- run_regression()
     
-      print(summary(fit[[1]]))
-    
-      if (length(fit) == 2) {
-        print(summary(fit[[2]]))
+      values$fit1 <- fit[[1]]
+      
+      values$num.fits <- length(fit)
+      
+      if (values$num.fits == 2) {
+        values$fit2 <- fit[[2]]
       }
       
-      print("fin")
+      print(summary(values$fit1))
+    
+      if (values$num.fits == 2) {
+        print(summary(values$fit2))
+      }
     } else {
       invalid_response()
     }
@@ -238,5 +245,233 @@ shinyServer(function(input, output) {
                  "Number of Extreme Points to Identify",
                  value = 0,
                  max = num.obs)
+  })
+  
+  observeEvent(input$display.plots, {
+    plots <- vector(mode = "list")
+    
+    i <- 0
+    
+    if (input$residual.fit == T) {
+      
+    }
+    
+    if (input$response.fit == T) {
+      
+    }
+    
+    if (input$qq == T) {
+      i <- i + 1
+      
+      fit <- values$fit1
+      
+      qqnorm(fit$residuals)
+      qqline(fit$residuals)
+      
+      dat <- as.data.frame(fit$residuals)
+      
+      colnames(dat) <- c("Res")
+      
+      # Calculate slope and intercept for qqline
+      
+      y     <- quantile(fit$residuals, c(0.25, 0.75), type=5)
+      x     <- qnorm(c(0.25, 0.75))
+      slope <- diff(y) / diff(x)
+      int   <- y[1] - slope * x[1]
+      
+      # Normal QQ plot
+      p <- ggplot(data = dat, aes(sample = Res)) +
+             geom_qq() + geom_abline(slope = slope, intercept = int)
+      
+      plots[[i]] <- p
+    }
+    
+    if (input$stdResidual.RobustDist == T) {
+      
+    }
+    
+    if (input$residual.density == T) {
+      
+    }
+    
+    if (input$stdResidual.Index == T) {
+      
+    }
+    
+    i <- i + 1
+    
+    dat <- data.frame(X = 1:6, Y = 3:8)
+    
+    plots[[i]] <- ggplot(dat, aes(x = X, y = Y)) +
+                    geom_point()
+    
+    values$plots <- plots
+
+    values$num.plots <- i
+
+    values$active.index <- 1
+
+    values$active.plot <- plots[[1]]
+    
+    output$plot.ui <- renderUI({
+      fluidPage(
+        wellPanel(
+          plotOutput("plot.output")
+        ),
+      
+        fluidRow(
+          column(1,
+                 offset = 8,
+                 actionButton("next.plot",
+                              "",
+                              icon = icon("angle-right", "fa-2x"))
+          )
+        )
+      )
+    })
+    
+    output$plot.output <- renderPlot({
+      values$active.plot
+    })
+  })
+  
+  output$plot.output <- renderPlot({
+      values$active.plot
+    })
+  
+  observeEvent(input$next.plot, {
+    if (values$num.plots > 0) {
+      values$active.index <- values$active.index %% values$num.plots + 1
+    
+      values$active.plot <- values$plots[[values$active.index]]
+      
+      output$plot.ui <- renderUI({
+        if (values$active.index == 1) {
+          fluidPage(
+            wellPanel(
+              plotOutput("plot.output")
+            ),
+          
+            fluidRow(
+              column(1,
+                     offset = 8,
+                     actionButton("next.plot",
+                                  "",
+                                  icon = icon("angle-right", "fa-2x"))
+              )
+            )
+          )
+        } else if (values$active.index == values$num.plots) {
+          fluidPage(
+            wellPanel(
+              plotOutput("plot.output")
+            ),
+          
+            fluidRow(
+              column(1,
+                     offset = 1,
+                     actionButton("prev.plot",
+                                  "",
+                                  icon = icon("angle-left", "fa-2x"))
+              )
+            )
+          )
+        } else {
+          fluidPage(
+            wellPanel(
+              plotOutput("plot.output")
+            ),
+          
+            fluidRow(
+              column(1,
+                     offset = 1,
+                     actionButton("prev.plot",
+                                  "",
+                                  icon = icon("angle-left", "fa-2x"))
+              ),
+              
+              column(1,
+                     offset = 8,
+                     actionButton("next.plot",
+                                  "",
+                                  icon = icon("angle-right", "fa-2x"))
+              )
+            )
+          )
+        }
+      })
+    
+      output$plot.output <- renderPlot({
+        values$active.plot
+      })
+    }
+  })
+  
+  observeEvent(input$prev.plot, {
+    if (values$num.plots > 0) {
+      values$active.index <- values$num.plots + (values$active.index - 1) %% -values$num.plots
+    
+      values$active.plot <- values$plots[[values$active.index]]
+      
+      output$plot.ui <- renderUI({
+        if (values$active.index == 1) {
+          fluidPage(
+            wellPanel(
+              plotOutput("plot.output")
+            ),
+          
+            fluidRow(
+              column(1,
+                     offset = 8,
+                     actionButton("next.plot",
+                                  "",
+                                  icon = icon("angle-right", "fa-2x"))
+              )
+            )
+          )
+        } else if (values$active.index == values$num.plots) {
+          fluidPage(
+            wellPanel(
+              plotOutput("plot.output")
+            ),
+          
+            fluidRow(
+              column(1,
+                     offset = 1,
+                     actionButton("prev.plot",
+                                  "",
+                                  icon = icon("angle-left", "fa-2x"))
+              )
+            )
+          )
+        } else {
+          fluidPage(
+            wellPanel(
+              plotOutput("plot.output")
+            ),
+          
+            fluidRow(
+              column(1,
+                     offset = 1,
+                     actionButton("prev.plot",
+                                  "",
+                                  icon = icon("angle-left", "fa-2x"))
+              ),
+              
+              column(1,
+                     offset = 8,
+                     actionButton("next.plot",
+                                  "",
+                                  icon = icon("angle-right", "fa-2x"))
+              )
+            )
+          )
+        }
+      })
+    
+      output$plot.output <- renderPlot({
+        values$active.plot
+      })
+    }
   })
 })

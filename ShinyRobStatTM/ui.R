@@ -12,6 +12,7 @@
 
 library(DT)
 library(shiny)
+library(shinydashboard)
 
 # Some custom CSS code for formatting panels
 CSS.format1 <- 
@@ -72,6 +73,16 @@ $(function(){
   });
 })
 "
+
+Previous_Button <- HTML(
+  '
+    <div class="col-sm-4"><i class="fa fa-angle-right fa-2x"></i></div>
+  ')
+              
+Next_Button <- HTML(
+  '
+    <div class="col-sm-4"><i class="fa fa-angle-right fa-2x"></i></div>
+  ')
 
 # Define UI for Shiny Application
 shinyUI(navbarPage("RobStatTM",
@@ -204,7 +215,7 @@ shinyUI(navbarPage("RobStatTM",
               tags$head(tags$script(HTML(JS.onCall))),
               
               selectizeInput("fit.option", "Method",
-                           choices = c("Least Squares", "M", "MM", "Distance Constrained", "S"),
+                           choices = c("Least Squares", "M", "MM", "Distance Constrained"),
                            selected = c("MM", "Least Squares"),
                            options = list(maxItems = 2)),
               
@@ -231,44 +242,57 @@ shinyUI(navbarPage("RobStatTM",
         
         # Plot selection
         tabPanel("Plotting",
-          fluidRow(
-            column(4,
-              wellPanel(
-                h3("Plots"),
-                checkboxInput("residual.fit", "Residuals v. Fit", TRUE),
-                checkboxInput("response.fit", "Response v. Fit", FALSE),
-                checkboxInput("qq", "Residuals Normal QQ Plot", TRUE),
-                checkboxInput("stdResidual.RobustDist", "Std. Residuals v. Robust Distances", TRUE),
-                checkboxInput("residual.density", "Estimated Residual Density", TRUE),
-                checkboxInput("stdResidual.Index", "Std. Residuals v. Index (Time)", TRUE)
-              )
+          sidebarLayout(
+            sidebarPanel(
+              tags$head(tags$style(HTML(CSS.format1))),
+              tags$head(tags$style(HTML("hr {border-top: 1px solid #000000;}"))),
+              h4("Plots"),
+              checkboxInput("residual.fit", "Residuals v. Fit", TRUE),
+              checkboxInput("response.fit", "Response v. Fit", FALSE),
+              checkboxInput("qq", "Residuals Normal QQ Plot", TRUE),
+              checkboxInput("stdResidual.RobustDist", "Std. Residuals v. Robust Distances", TRUE),
+              checkboxInput("residual.density", "Estimated Residual Density", TRUE),
+              checkboxInput("stdResidual.Index", "Std. Residuals v. Index (Time)", TRUE),
+              
+              tags$hr(),
+              
+              h4("Options"),
+              checkboxInput("include.smooth", "Residuals v. Fit", TRUE),
+              checkboxInput("include.rugplot", "Response v. Fit", FALSE),
+              checkboxInput("qq.env", "Residuals Normal QQ Plot", TRUE),
+              checkboxInput("qqline.robust", "Std. Residuals v. Robust Distances", TRUE),
+              checkboxInput("qq.halfnorm", "Estimated Residual Density", FALSE),
+              uiOutput("extreme.points"),
+              
+              tags$hr(),
+              
+              h4("Overlaid Plots"),
+              checkboxInput("overlaid.qq", "Residuals Normal QQ", TRUE),
+              checkboxInput("overlaid.residual.density", "Estimated Residual Density", FALSE),
+              
+              # Button to run selected regression
+              actionButton("display.plots", "View Plots")
             ),
-            
-            column(4,
-              wellPanel(
-                h3("Options"),
-                checkboxInput("include.smooth", "Residuals v. Fit", TRUE),
-                checkboxInput("include.rugplot", "Response v. Fit", FALSE),
-                checkboxInput("qq.env", "Residuals Normal QQ Plot", TRUE),
-                checkboxInput("qqline.robust", "Std. Residuals v. Robust Distances", TRUE),
-                checkboxInput("qq.halfnorm", "Estimated Residual Density", FALSE),
-                uiOutput("extreme.points")
-              )
-            )
-          ),
-            
-          fluidRow(
-            column(4,
-              wellPanel(
-                h3("Overlaid Plots"),
-                checkboxInput("overlaid.qq", "Residuals Normal QQ", TRUE),
-                checkboxInput("overlaid.residual.density", "Estimated Residual Density", FALSE)
-              )
+          
+            mainPanel(
+              tags$head(tags$style(HTML(CSS.format1))),
+              
+              uiOutput("plot.ui")
             )
           )
         ),
-          
-        tabPanel("Predict")
+
+        tabPanel("Predict",
+          sidebarLayout(
+            sidebarPanel(
+              
+            ),
+            
+            mainPanel(
+              
+            )
+          )
+        )
       )
     )
   )

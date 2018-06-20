@@ -12,6 +12,8 @@ library(ggplot2)
 library(RobStatTM)
 library(shiny)
 
+theme_set(theme_bw())
+
 # Back-end implementation of Shiny server
 shinyServer(function(input, output) {
   
@@ -216,15 +218,12 @@ shinyServer(function(input, output) {
     
       values$fit1 <- fit[[1]]
       
-      values$num.fits <- length(fit)
+      print(summary(values$fit1))
       
+      values$num.fits <- length(fit)
+        
       if (values$num.fits == 2) {
         values$fit2 <- fit[[2]]
-      }
-      
-      print(summary(values$fit1))
-    
-      if (values$num.fits == 2) {
         print(summary(values$fit2))
       }
     } else {
@@ -252,25 +251,54 @@ shinyServer(function(input, output) {
     
     i <- 0
     
+    fit <- values$fit1
+    
+    # Residual v. fitted values
     if (input$residual.fit == T) {
-      
-    }
-    
-    if (input$response.fit == T) {
-      
-    }
-    
-    if (input$qq == T) {
       i <- i + 1
       
-      fit <- values$fit1
+      fit.vals <- fitted(fit)
+      
+      dat <- data.frame(X = fit.vals, Y = fit$residuals)
+      
+      p <- ggplot(data = dat, aes(x = X, y = Y)) +
+             geom_point()
+      
+      if (input$include.rugplot == T) {
+        p <- p + geom_rug()
+      }
+
+      plots[[i]] <- p
+    }
+    
+    # Response v. fitted values
+    if (input$response.fit == T) {
+      i <- i + 1
+
+      fit.vals <- fitted(fit)
+
+      dat <- data.frame(X = fit.vals, Y = fit$model[, 1])
+
+      p <- ggplot(data = dat, aes(x = X, y = Y)) +
+             ggtitle("Response v. Fitted Values") +
+             theme()
+             geom_point()
+      
+      if (input$include.rugplot == T) {
+        p <- p + geom_rug()
+      }
+
+      plots[[i]] <- p
+    }
+    
+    # QQ Plot
+    if (input$qq == T) {
+      i <- i + 1
       
       qqnorm(fit$residuals)
       qqline(fit$residuals)
       
-      dat <- as.data.frame(fit$residuals)
-      
-      colnames(dat) <- c("Res")
+      dat <- data.frame(Res = fit$residuals)
       
       # Calculate slope and intercept for qqline
       
@@ -281,63 +309,91 @@ shinyServer(function(input, output) {
       
       # Normal QQ plot
       p <- ggplot(data = dat, aes(sample = Res)) +
+             ggtitle("Residual v. Normal QQ Plot") +
              geom_qq() + geom_abline(slope = slope, intercept = int)
       
       plots[[i]] <- p
     }
     
+    # Standardized residuals vs. robust distances
     if (input$stdResidual.RobustDist == T) {
       
     }
     
+    # Estimated residual density
     if (input$residual.density == T) {
+      i <- i + 1
       
+      dat <- data.frame(Res = fit$residuals)
+      
+      p <- ggplot(data = dat) +
+             ggtitle("Estimated Residual Density") +
+             geom_histogram(aes(x = Res, y = ..density..),
+                            fill  = 'white',
+                            color = 'black',
+                            bins  = 35) +
+             geom_density(aes(x = Res),
+                          color = 'blue',
+                          fill  = 'blue',
+                          alpha = 0.1)
+      
+      plots[[i]] <- p
     }
     
+    # Standardized residuals vs. index values
     if (input$stdResidual.Index == T) {
       
     }
     
-    i <- i + 1
-    
-    dat <- data.frame(X = 1:6, Y = 3:8)
-    
-    plots[[i]] <- ggplot(dat, aes(x = X, y = Y)) +
-                    geom_point()
-    
-    values$plots <- plots
+    if (i == 0) {
+      output$plot.ui <- renderUI({
+        fluidPage(verbatimTextOutput("no.selection"))
+        
+        output$no.selection <- renderPrint({
+          print("No plots selected.")
+        })
+      })
+    } else {
+      values$plots <- plots
 
-    values$num.plots <- i
-
-    values$active.index <- 1
-
-    values$active.plot <- plots[[1]]
-    
-    output$plot.ui <- renderUI({
-      fluidPage(
-        wellPanel(
-          plotOutput("plot.output")
-        ),
-      
-        fluidRow(
-          column(1,
-                 offset = 8,
-                 actionButton("next.plot",
-                              "",
-                              icon = icon("angle-right", "fa-2x"))
-          )
-        )
-      )
-    })
-    
-    output$plot.output <- renderPlot({
-      values$active.plot
-    })
-  })
+      values$num.plots <- i
   
-  output$plot.output <- renderPlot({
-      values$active.plot
-    })
+      values$active.index <- 1
+  
+      values$active.plot <- plots[[1]]
+      
+      if (i > 1) {
+        output$plot.ui <- renderUI({
+          fluidPage(
+            wellPanel(
+              plotOutput("plot.output")
+            ),
+          
+            fluidRow(
+              column(1,
+                     offset = 10,
+                     actionButton("next.plot",
+                                  "",
+                                  icon = icon("angle-right", "fa-2x"))
+              )
+            )
+          )
+        })
+      } else {
+        output$plot.ui <- renderUI({
+          fluidPage(
+            wellPanel(
+              plotOutput("plot.output")
+            )
+          )
+        })
+      }
+      
+      output$plot.output <- renderPlot({
+        values$active.plot
+      })
+    }
+  })
   
   observeEvent(input$next.plot, {
     if (values$num.plots > 0) {
@@ -346,22 +402,7 @@ shinyServer(function(input, output) {
       values$active.plot <- values$plots[[values$active.index]]
       
       output$plot.ui <- renderUI({
-        if (values$active.index == 1) {
-          fluidPage(
-            wellPanel(
-              plotOutput("plot.output")
-            ),
-          
-            fluidRow(
-              column(1,
-                     offset = 8,
-                     actionButton("next.plot",
-                                  "",
-                                  icon = icon("angle-right", "fa-2x"))
-              )
-            )
-          )
-        } else if (values$active.index == values$num.plots) {
+        if (values$active.index == values$num.plots) {
           fluidPage(
             wellPanel(
               plotOutput("plot.output")
@@ -422,25 +463,10 @@ shinyServer(function(input, output) {
           
             fluidRow(
               column(1,
-                     offset = 8,
+                     offset = 10,
                      actionButton("next.plot",
                                   "",
                                   icon = icon("angle-right", "fa-2x"))
-              )
-            )
-          )
-        } else if (values$active.index == values$num.plots) {
-          fluidPage(
-            wellPanel(
-              plotOutput("plot.output")
-            ),
-          
-            fluidRow(
-              column(1,
-                     offset = 1,
-                     actionButton("prev.plot",
-                                  "",
-                                  icon = icon("angle-left", "fa-2x"))
               )
             )
           )

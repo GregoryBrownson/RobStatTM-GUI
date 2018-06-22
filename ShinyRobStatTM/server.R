@@ -10,6 +10,7 @@
 library(DT)
 library(ggplot2)
 library(RobStatTM)
+library(robustbase)
 library(shiny)
 
 theme_set(theme_bw())
@@ -195,7 +196,7 @@ shinyServer(function(input, output) {
                     values$regress.models)
     
     fit <- vector(mode = "list", length = length(index))
-    
+
     fit[[1]] <- model[[1]](as.formula(input$formula.text), data = values$dat)
     
     
@@ -261,14 +262,25 @@ shinyServer(function(input, output) {
       
       dat <- data.frame(X = fit.vals, Y = fit$residuals)
       
-      p <- ggplot(data = dat, aes(x = X, y = Y)) +
-             geom_point()
+      sigma <- 1
+      
+      if (any(class(fit) == "lm")) {
+        sigma <- sd(fit$residuals)
+      } else {
+        sigma <- fit$scale
+      }
+      
+      plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
+                      ggtitle("Residual v. Fitted Values") +
+                      xlab("Fitted Values") +
+                      ylab("Residuals") +
+                      geom_point() +
+                      geom_hline(yintercept = c(-2.5 * sigma, 0, 2.5 * sigma),
+                                 linetype = 2)
       
       if (input$include.rugplot == T) {
-        p <- p + geom_rug()
+        plots[[i]] <- plots[[i]] + geom_rug()
       }
-
-      plots[[i]] <- p
     }
     
     # Response v. fitted values
@@ -279,27 +291,26 @@ shinyServer(function(input, output) {
 
       dat <- data.frame(X = fit.vals, Y = fit$model[, 1])
 
-      p <- ggplot(data = dat, aes(x = X, y = Y)) +
-             ggtitle("Response v. Fitted Values") +
-             theme()
-             geom_point()
-      
-      if (input$include.rugplot == T) {
-        p <- p + geom_rug()
-      }
+      plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
+                      ggtitle("Response v. Fitted Values") +
+                      xlab("Fitteed Values") +
+                      ylab("Response") +
+                      geom_point()
 
-      plots[[i]] <- p
+      if (input$include.rugplot == T) {
+        plots[[i]] <- plots[[i]] + geom_rug()
+      }
     }
-    
+
     # QQ Plot
     if (input$qq == T) {
       i <- i + 1
-      
+
       qqnorm(fit$residuals)
       qqline(fit$residuals)
-      
-      dat <- data.frame(Res = fit$residuals)
-      
+
+      dat <- data.frame(Res = sort(fit$residuals))
+
       # Calculate slope and intercept for qqline
       
       y     <- quantile(fit$residuals, c(0.25, 0.75), type=5)
@@ -307,17 +318,60 @@ shinyServer(function(input, output) {
       slope <- diff(y) / diff(x)
       int   <- y[1] - slope * x[1]
       
+      if (input$qq.env == T) {
+        confidence.level <- 0.95
+        n <- length(fit$residuals)
+        P <- ppoints(n)
+        z <- qnorm(P)
+        
+        zz <- qnorm(1 - (1 - confidence.level) / 2)
+        SE <- (slope / dnorm(z)) * sqrt(P * (1 - P) / n)
+        fit.vals <- int + slope * z
+        dat$z <- z
+        dat$lower <- fit.vals - zz * SE
+        dat$upper <- fit.vals + zz * SE
+      }
+
       # Normal QQ plot
-      p <- ggplot(data = dat, aes(sample = Res)) +
-             ggtitle("Residual v. Normal QQ Plot") +
-             geom_qq() + geom_abline(slope = slope, intercept = int)
+      plots[[i]] <- ggplot(data = dat, aes(x = z, y = Res)) +
+                      ggtitle("Residual v. Normal QQ Plot") +
+                      xlab("Normal Quantiles") +
+                      ylab("Residual Quantiles") +
+                      geom_point() +
+                      geom_abline(slope = slope, intercept = int)
       
-      plots[[i]] <- p
+      if (input$qq.env == T) {
+        plots[[i]] <- plots[[i]] + geom_ribbon(aes(ymin = lower, ymax = upper),
+                                             alpha = 0.2)
+      }
     }
     
     # Standardized residuals vs. robust distances
     if (input$stdResidual.RobustDist == T) {
+      i <- i + 1
       
+      if (any(class(fit) == "lm")) {
+        st.residuals <- rstandard(fit)
+      } else {
+        st.residuals <- fit$residuals / fit$scale
+      }
+      chi <- sqrt(qchisq(p = 1 - 0.025, df = fit$rank))
+      
+      MD <- robMD(x         = model.frame(fit, fit$model),
+                  intercept = attr(fit$terms, "intercept"),
+                  wqr       = fit$qr)
+              
+      dat <- data.frame(X = MD, Y = st.residuals)
+
+      plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
+                      ggtitle("Standardized Residuals v. Robust Distances") +
+                      xlab("Robust Distances") +
+                      ylab("Robust Standardized Residuals") +
+                      geom_point() +
+                      geom_hline(yintercept = c(-2.5, 0, 2.5),
+                                 linetype = 2) + 
+                      geom_vline(xintercept = chi,
+                                 linetype = 2)
     }
     
     # Estimated residual density
@@ -326,24 +380,46 @@ shinyServer(function(input, output) {
       
       dat <- data.frame(Res = fit$residuals)
       
-      p <- ggplot(data = dat) +
-             ggtitle("Estimated Residual Density") +
-             geom_histogram(aes(x = Res, y = ..density..),
-                            fill  = 'white',
-                            color = 'black',
-                            bins  = 35) +
-             geom_density(aes(x = Res),
-                          color = 'blue',
-                          fill  = 'blue',
-                          alpha = 0.1)
-      
-      plots[[i]] <- p
+      plots[[i]] <- ggplot(data = dat) +
+                      ggtitle("Estimated Residual Density") +
+                      xlab("Residuals") +
+                      ylab("Density") +
+                      geom_histogram(aes(x = Res, y = ..density..),
+                                     fill  = 'white',
+                                     color = 'black',
+                                     bins  = 35) +
+                      geom_density(aes(x = Res),
+                                   color = 'blue',
+                                   fill  = 'blue',
+                                   alpha = 0.1)
     }
     
     # Standardized residuals vs. index values
     if (input$stdResidual.Index == T) {
+      i <- i + 1
       
+      if (any(class(fit) == "lm")) {
+        st.residuals <- rstandard(fit)
+      } else {
+        st.residuals <- fit$residuals / fit$scale
+      }
+      
+      dat <- data.frame(X = 1:length(st.residuals), Y = st.residuals)
+      
+      plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) + 
+                      ggtitle("Standardized Residuals v. Index") +
+                      xlab("Index") +
+                      ylab("Standardized Residuals") +
+                      geom_point()
     }
+    
+    ## Overlaid plots
+    
+    # if (values$num.fits == 1) {
+    #   
+    # } else {
+    #   
+    # }
     
     if (i == 0) {
       output$plot.ui <- renderUI({
@@ -357,9 +433,9 @@ shinyServer(function(input, output) {
       values$plots <- plots
 
       values$num.plots <- i
-  
+
       values$active.index <- 1
-  
+
       values$active.plot <- plots[[1]]
       
       if (i > 1) {
@@ -450,7 +526,7 @@ shinyServer(function(input, output) {
   
   observeEvent(input$prev.plot, {
     if (values$num.plots > 0) {
-      values$active.index <- values$num.plots + (values$active.index - 1) %% -values$num.plots
+      values$active.index <- values$num.plots + (values$active.index - 1) %% - values$num.plots
     
       values$active.plot <- values$plots[[values$active.index]]
       

@@ -12,7 +12,6 @@
 
 library(DT)
 library(shiny)
-library(shinydashboard)
 
 # Some custom CSS code for formatting panels
 CSS.format1 <- 
@@ -211,13 +210,14 @@ shinyUI(navbarPage("RobStatTM",
           sidebarLayout(
             sidebarPanel(
               tags$head(tags$style(HTML(CSS.format1))),
+              tags$head(tags$style(HTML("hr {border-top: 1px solid #000000;}"))),
               tags$head(tags$script(HTML(JS.log10))),
               tags$head(tags$script(HTML(JS.onCall))),
               
               selectizeInput("fit.option", "Method",
-                           choices = c("Least Squares", "M", "MM", "Distance Constrained"),
-                           selected = c("MM", "Least Squares"),
-                           options = list(maxItems = 2)),
+                             choices = c("Least Squares", "M", "MM", "Distance Constrained"),
+                             selected = "MM",
+                             options = list(maxItems = 2, placeholder = 'Select up to 2 methods')),
               
               # List of dependent variables, must be selected
               uiOutput("select.dependent.LinRegress"),
@@ -227,6 +227,9 @@ shinyUI(navbarPage("RobStatTM",
               
               # String representing regression formula of form Y ~ X_0 + ... + X_n
               uiOutput("formula.LinRegress"),
+              
+              # Interface to robust options
+              uiOutput("robust.control"),
         
               # Button to run selected regression
               actionButton("display.LinRegress", "Results")
@@ -263,12 +266,6 @@ shinyUI(navbarPage("RobStatTM",
               checkboxInput("qqline.robust", "Include Robust QQ Line", TRUE),
               checkboxInput("qq.halfnorm", "Half Normal QQ Plot", FALSE),
               uiOutput("extreme.points"),
-              
-              tags$hr(),
-              
-              h4("Overlaid Plots"),
-              checkboxInput("overlaid.qq", "Residuals Normal QQ", TRUE),
-              checkboxInput("overlaid.residual.density", "Estimated Residual Density", FALSE),
               
               # Button to run selected regression
               actionButton("display.plots", "View Plots")

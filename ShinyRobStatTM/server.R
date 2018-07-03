@@ -108,7 +108,7 @@ shinyServer(function(input, output) {
     
     # Get values for location and scale using 'MLocDis' function from
     # 'RobStatTM' package
-    est <- MLocDis(x     = as.numeric(values$dat[,input$variable]),
+    est <- MLocDis(x     = as.numeric(values$dat[, input$variable]),
                    psi   = input$psi,
                    eff   = input$efficiency,
                    maxit = input$max.iter,
@@ -133,7 +133,7 @@ shinyServer(function(input, output) {
   ## Running Regression ##
   
   values$regress.methods <- c("Least Squares", "M", "MM", "Distance Constrained")
-  values$regress.models  <- list(lm, lmrobM, lmrobdetMM, lmrobdetDCML)
+  values$regress.models  <- c("lm", "lmrobM", "lmrobdetMM", "lmrobdetDCML")
 
   output$select.dependent.LinRegress <- renderUI({
     # If there is no data, do nothing
@@ -184,24 +184,60 @@ shinyServer(function(input, output) {
               formula.str)
   })
   
+  output$robust.control <- renderUI({
+    if (any(input$fit.option != "Least Squares")) {
+      tabPanel("",
+          tags$hr(),
+          
+          h4("Robust Controls"),
+          
+          selectInput("family.regress", "Family",
+                      choices = c("Bi-square" = "bisquare",
+                                  "Optimal"   = "optimal",
+                                  "Modified Optimal" = "modified.optimal")),
+          
+          selectInput("eff.regress", "Efficiency",
+                      choices = c("0.85", "0.90", "0.95")),
+        
+          tags$hr()
+      )
+    }
+  })
+  
   run_regression <- eventReactive(input$display.LinRegress, {
     index <- match(input$fit.option, values$regress.methods)
     
     n <- length(index)
     
-    model <- lapply(index,
-                    function(i, model.list) {
-                      model.list[[i]]
+    model <-sapply(index,
+                    function(i, m) {
+                      m[i]
                     },
                     values$regress.models)
     
     fit <- vector(mode = "list", length = length(index))
-
-    fit[[1]] <- model[[1]](as.formula(input$formula.text), data = values$dat)
+    
+    control <- lmrobdet.control(efficiency = as.numeric(input$eff.regress),
+                                family = input$family.regress,
+                                compute.rd = T)
+    if (model[[1]] == "lm") {
+      fit[[1]] <- do.call(model[1], list(as.formula(input$formula.text), data = values$dat))
+    } else {
+      fit[[1]] <- do.call(model[1], list(as.formula(input$formula.text),
+                                         data    = values$dat,
+                                         control = control))
+    }
+    
     
     
     if (length(index) == 2) {
-      fit[[2]] <- model[[2]](as.formula(input$formula.text), data = values$dat)
+      if (model[[2]] == "lm") {
+        fit[[2]] <- do.call(model[2], list(as.formula(input$formula.text), data = values$dat))
+      } else {
+        fit[[2]] <- do.call(model[2], list(as.formula(input$formula.text),
+                                           data    = values$dat,
+                                           control = control))
+      }
     }
     
     return(fit)
@@ -245,6 +281,19 @@ shinyServer(function(input, output) {
                  "Number of Extreme Points to Identify",
                  value = 0,
                  max = num.obs)
+  })
+  
+  output$overlaid.plots <- renderUI({
+    if (values$num.fits == 2)
+    {
+      tabPanel("",
+        tags$hr(),
+                
+        h4("Overlaid Plots"),
+        checkboxInput("overlaid.qq", "Residuals Normal QQ", TRUE),
+        checkboxInput("overlaid.residual.density", "Estimated Residual Density", FALSE)
+      )
+    }
   })
   
   observeEvent(input$display.plots, {
@@ -293,7 +342,7 @@ shinyServer(function(input, output) {
 
       plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
                       ggtitle("Response v. Fitted Values") +
-                      xlab("Fitteed Values") +
+                      xlab("Fitted Values") +
                       ylab("Response") +
                       geom_point()
 
@@ -333,16 +382,24 @@ shinyServer(function(input, output) {
       }
 
       # Normal QQ plot
-      plots[[i]] <- ggplot(data = dat, aes(x = z, y = Res)) +
-                      ggtitle("Residual v. Normal QQ Plot") +
-                      xlab("Normal Quantiles") +
-                      ylab("Residual Quantiles") +
-                      geom_point() +
-                      geom_abline(slope = slope, intercept = int)
+      
       
       if (input$qq.env == T) {
-        plots[[i]] <- plots[[i]] + geom_ribbon(aes(ymin = lower, ymax = upper),
-                                             alpha = 0.2)
+        plots[[i]] <- ggplot(data = dat, aes(x = z, y = Res)) +
+                        ggtitle("Residual v. Normal QQ Plot") +
+                        xlab("Normal Quantiles") +
+                        ylab("Residual Quantiles") +
+                        geom_point() +
+                        geom_abline(slope = slope, intercept = int) +
+                        geom_ribbon(aes(ymin = lower, ymax = upper),
+                                    alpha = 0.2)
+      } else {
+        plots[[i]] <- ggplot(data = dat, aes(sample = Res)) +
+                        ggtitle("Residual v. Normal QQ Plot") +
+                        xlab("Normal Quantiles") +
+                        ylab("Residual Quantiles") +
+                        geom_qq() +
+                        geom_abline(slope = slope, intercept = int)
       }
     }
     
@@ -392,6 +449,10 @@ shinyServer(function(input, output) {
                                    color = 'blue',
                                    fill  = 'blue',
                                    alpha = 0.1)
+      
+      if (input$include.rugplot == T) {
+          plots[[i]] <- plots[[i]] + geom_rug()
+        }
     }
     
     # Standardized residuals vs. index values
@@ -413,167 +474,538 @@ shinyServer(function(input, output) {
                       geom_point()
     }
     
-    ## Overlaid plots
+    ## 2 Regression Case
     
-    # if (values$num.fits == 1) {
-    #   
-    # } else {
-    #   
-    # }
+    if (values$num.fits == 2) {
+      plots2 <- vector(mode = "list")
     
-    if (i == 0) {
-      output$plot.ui <- renderUI({
-        fluidPage(verbatimTextOutput("no.selection"))
-        
-        output$no.selection <- renderPrint({
-          print("No plots selected.")
-        })
-      })
-    } else {
-      values$plots <- plots
-
-      values$num.plots <- i
-
-      values$active.index <- 1
-
-      values$active.plot <- plots[[1]]
+      j <- 0
       
-      if (i > 1) {
-        output$plot.ui <- renderUI({
-          fluidPage(
-            wellPanel(
-              plotOutput("plot.output")
-            ),
-          
-            fluidRow(
-              column(1,
-                     offset = 10,
-                     actionButton("next.plot",
-                                  "",
-                                  icon = icon("angle-right", "fa-2x"))
-              )
-            )
-          )
-        })
-      } else {
-        output$plot.ui <- renderUI({
-          fluidPage(
-            wellPanel(
-              plotOutput("plot.output")
-            )
-          )
-        })
+      fit2 <- values$fit2
+      
+      # Residual v. fitted values
+      if (input$residual.fit == T) {
+        j <- j + 1
+        
+        fit.vals <- fitted(fit2)
+        
+        dat <- data.frame(X = fit.vals, Y = fit$residuals)
+        
+        sigma <- 1
+        
+        if (any(class(fit2) == "lm")) {
+          sigma <- sd(fit2$residuals)
+        } else {
+          sigma <- fit2$scale
+        }
+        
+        plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) +
+                         ggtitle("Residual v. Fitted Values") +
+                         xlab("Fitted Values") +
+                         ylab("Residuals") +
+                         geom_point() +
+                         geom_hline(yintercept = c(-2.5 * sigma, 0, 2.5 * sigma),
+                                    linetype = 2)
+        
+        if (input$include.rugplot == T) {
+          plots2[[j]] <- plots2[[j]] + geom_rug()
+        }
       }
       
-      output$plot.output <- renderPlot({
-        values$active.plot
-      })
+      # Response v. fitted values
+      if (input$response.fit == T) {
+        j <- j + 1
+  
+        fit.vals <- fitted(fit2)
+  
+        dat <- data.frame(X = fit.vals, Y = fit2$model[, 1])
+  
+        plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) +
+                         ggtitle("Response v. Fitted Values") +
+                         xlab("Fitted Values") +
+                         ylab("Response") +
+                         geom_point()
+  
+        if (input$include.rugplot == T) {
+          plots2[[j]] <- plots2[[j]] + geom_rug()
+        }
+      }
+  
+      # QQ Plot
+      if (input$qq == T) {
+        j <- j + 1
+  
+        qqnorm(fit2$residuals)
+        qqline(fit2$residuals)
+  
+        dat <- data.frame(Res = sort(fit2$residuals))
+  
+        # Calculate slope and intercept for qqline
+        
+        y     <- quantile(fit2$residuals, c(0.25, 0.75), type=5)
+        x     <- qnorm(c(0.25, 0.75))
+        slope <- diff(y) / diff(x)
+        int   <- y[1] - slope * x[1]
+        
+        if (input$qq.env == T) {
+          confidence.level <- 0.95
+          n <- length(fit2$residuals)
+          P <- ppoints(n)
+          z <- qnorm(P)
+          
+          zz <- qnorm(1 - (1 - confidence.level) / 2)
+          SE <- (slope / dnorm(z)) * sqrt(P * (1 - P) / n)
+          fit.vals <- int + slope * z
+          dat$z <- z
+          dat$lower <- fit.vals - zz * SE
+          dat$upper <- fit.vals + zz * SE
+          
+          plots2[[j]] <- ggplot(data = dat, aes(x = z, y = Res)) +
+                           ggtitle("Residual v. Normal QQ Plot") +
+                           xlab("Normal Quantiles") +
+                           ylab("Residual Quantiles") +
+                           geom_point() +
+                           geom_abline(slope = slope, intercept = int) +
+                           geom_ribbon(aes(ymin = lower, ymax = upper),
+                                       alpha = 0.2)
+        } else {
+          plots2[[j]] <- ggplot(data = dat, aes(sample = Res)) +
+                           ggtitle("Residual v. Normal QQ Plot") +
+                           xlab("Normal Quantiles") +
+                           ylab("Residual Quantiles") +
+                           geom_qq() +
+                           geom_abline(slope = slope, intercept = int)
+        }
+      }
+      
+      # Standardized residuals vs. robust distances
+      if (input$stdResidual.RobustDist == T) {
+        j <- j + 1
+        
+        if (any(class(fit2) == "lm")) {
+          st.residuals <- rstandard(fit2)
+        } else {
+          st.residuals <- fit2$residuals / fit2$scale
+        }
+        chi <- sqrt(qchisq(p = 1 - 0.025, df = fit2$rank))
+        
+        MD <- robMD(x         = model.frame(fit2, fit2$model),
+                    intercept = attr(fit2$terms, "intercept"),
+                    wqr       = fit2$qr)
+                
+        dat <- data.frame(X = MD, Y = st.residuals)
+  
+        plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) +
+                         ggtitle("Standardized Residuals v. Robust Distances") +
+                         xlab("Robust Distances") +
+                         ylab("Robust Standardized Residuals") +
+                         geom_point() +
+                         geom_hline(yintercept = c(-2.5, 0, 2.5),
+                                    linetype = 2) + 
+                         geom_vline(xintercept = chi,
+                                    linetype = 2)
+      }
+      
+      # Estimated residual density
+      if (input$residual.density == T) {
+        j <- j + 1
+        
+        dat <- data.frame(Res = fit2$residuals)
+        
+        plots2[[j]] <- ggplot(data = dat) +
+                         ggtitle("Estimated Residual Density") +
+                         xlab("Residuals") +
+                         ylab("Density") +
+                         geom_histogram(aes(x = Res, y = ..density..),
+                                        fill  = 'white',
+                                        color = 'black',
+                                        bins  = 35) +
+                         geom_density(aes(x = Res),
+                                      color = 'blue',
+                                      fill  = 'blue',
+                                      alpha = 0.1)
+        
+        if (input$include.rugplot == T) {
+          plots2[[j]] <- plots2[[j]] + geom_rug()
+        }
+      }
+      
+      # Standardized residuals vs. index values
+      if (input$stdResidual.Index == T) {
+        j <- j + 1
+        
+        if (any(class(fit2) == "lm")) {
+          st.residuals <- rstandard(fit2)
+        } else {
+          st.residuals <- fit2$residuals / fit2$scale
+        }
+        
+        dat <- data.frame(X = 1:length(st.residuals), Y = st.residuals)
+        
+        plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) + 
+                         ggtitle("Standardized Residuals v. Index") +
+                         xlab("Index") +
+                         ylab("Standardized Residuals") +
+                         geom_point()
+      }
+      
+      if (i == 0) {
+        output$plot.ui <- renderUI({
+          fluidPage(verbatimTextOutput("no.selection"))
+          
+          output$no.selection <- renderPrint({
+            print("No plots selected.")
+          })
+        })
+      } else {
+        values$plots        <- plots
+        values$num.plots    <- i
+        values$active.index <- 1
+        values$active.plot  <- plots[[1]]
+        
+        values$plots2        <- plots2
+        values$num.plots2    <- j
+        values$active.index2 <- 1
+        values$active.plot2  <- plots2[[1]]
+        
+        if (i > 1) {
+          output$plot.ui <- renderUI({
+            fluidPage(
+              fluidRow(
+                column(6,
+                  plotOutput("plot.output")
+                ),
+                
+                column(6,
+                  plotOutput("plot.output2")
+                )
+              ),
+              
+              fluidRow(
+                column(1,
+                       offset = 10,
+                       actionButton("next.plot",
+                                    "",
+                                    icon = icon("angle-right", "fa-2x"))
+                )
+              )
+            )
+          })
+        } else {
+          output$plot.ui <- renderUI({
+            fluidPage(
+              fluidRow(
+                column(6,
+                       plotOutput("plot.output")
+                ),
+                
+                column(6,
+                       plotOutput("plot.output2")
+                )
+              )
+            )
+          })
+        }
+        
+        output$plot.output <- renderPlot({
+          values$active.plot
+        })
+        
+        output$plot.output2 <- renderPlot({
+          values$active.plot2
+        })
+      }
+    } else {
+      if (i == 0) {
+        output$plot.ui <- renderUI({
+          fluidPage(verbatimTextOutput("no.selection"))
+          
+          output$no.selection <- renderPrint({
+            print("No plots selected.")
+          })
+        })
+      } else {
+        values$plots        <- plots
+        values$num.plots    <- i
+        values$active.index <- 1
+        values$active.plot  <- plots[[1]]
+        
+        if (i > 1) {
+          output$plot.ui <- renderUI({
+            fluidPage(
+              wellPanel(
+                plotOutput("plot.output")
+              ),
+              
+              fluidRow(
+                column(1,
+                       offset = 10,
+                       actionButton("next.plot",
+                                    "",
+                                    icon = icon("angle-right", "fa-2x"))
+                )
+              )
+            )
+          })
+        } else {
+          output$plot.ui <- renderUI({
+            fluidPage(
+              wellPanel(
+                plotOutput("plot.output")
+              )
+            )
+          })
+        }
+        
+        output$plot.output <- renderPlot({
+          values$active.plot
+        })
+      }
     }
   })
   
   observeEvent(input$next.plot, {
     if (values$num.plots > 0) {
-      values$active.index <- values$active.index %% values$num.plots + 1
-    
-      values$active.plot <- values$plots[[values$active.index]]
-      
-      output$plot.ui <- renderUI({
-        if (values$active.index == values$num.plots) {
-          fluidPage(
-            wellPanel(
-              plotOutput("plot.output")
-            ),
-          
-            fluidRow(
-              column(1,
-                     offset = 1,
-                     actionButton("prev.plot",
-                                  "",
-                                  icon = icon("angle-left", "fa-2x"))
-              )
-            )
-          )
-        } else {
-          fluidPage(
-            wellPanel(
-              plotOutput("plot.output")
-            ),
-          
-            fluidRow(
-              column(1,
-                     offset = 1,
-                     actionButton("prev.plot",
-                                  "",
-                                  icon = icon("angle-left", "fa-2x"))
+      if (values$num.fits == 2) {
+        values$active.index <- values$active.index %% values$num.plots + 1
+        values$active.plot  <- values$plots[[values$active.index]]
+        
+        values$active.index2 <- values$active.index2 %% values$num.plots + 1
+        values$active.plot2  <- values$plots2[[values$active.index2]]
+        
+        output$plot.ui <- renderUI({
+          if (values$active.index == values$num.plots) {
+            fluidPage(
+              fluidRow(
+                column(6,
+                       plotOutput("plot.output")
+                ),
+                
+                column(6,
+                       plotOutput("plot.output2")
+                )
               ),
               
-              column(1,
-                     offset = 8,
-                     actionButton("next.plot",
-                                  "",
-                                  icon = icon("angle-right", "fa-2x"))
+              fluidRow(
+                column(1,
+                       offset = 1,
+                       actionButton("prev.plot",
+                                    "",
+                                    icon = icon("angle-left", "fa-2x"))
+                )
               )
             )
-          )
-        }
-      })
-    
-      output$plot.output <- renderPlot({
-        values$active.plot
-      })
+          } else {
+            fluidPage(
+              fluidRow(
+                column(6,
+                       plotOutput("plot.output")
+                ),
+                
+                column(6,
+                       plotOutput("plot.output2")
+                )
+              ),
+              
+              fluidRow(
+                column(1,
+                       offset = 1,
+                       actionButton("prev.plot",
+                                    "",
+                                    icon = icon("angle-left", "fa-2x"))
+                ),
+                
+                column(1,
+                       offset = 8,
+                       actionButton("next.plot",
+                                    "",
+                                    icon = icon("angle-right", "fa-2x"))
+                )
+              )
+            )
+          }
+        })
+        
+        output$plot.output <- renderPlot({
+          values$active.plot
+        })
+        
+        output$plot.output2 <- renderPlot({
+          values$active.plot2
+        })
+      } else {
+        
+        values$active.index <- values$active.index %% values$num.plots + 1
+      
+        values$active.plot <- values$plots[[values$active.index]]
+        
+        output$plot.ui <- renderUI({
+          if (values$active.index == values$num.plots) {
+            fluidPage(
+              wellPanel(
+                plotOutput("plot.output")
+              ),
+            
+              fluidRow(
+                column(1,
+                       offset = 1,
+                       actionButton("prev.plot",
+                                    "",
+                                    icon = icon("angle-left", "fa-2x"))
+                )
+              )
+            )
+          } else {
+            fluidPage(
+              wellPanel(
+                plotOutput("plot.output")
+              ),
+            
+              fluidRow(
+                column(1,
+                       offset = 1,
+                       actionButton("prev.plot",
+                                    "",
+                                    icon = icon("angle-left", "fa-2x"))
+                ),
+                
+                column(1,
+                       offset = 8,
+                       actionButton("next.plot",
+                                    "",
+                                    icon = icon("angle-right", "fa-2x"))
+                )
+              )
+            )
+          }
+        })
+      
+        output$plot.output <- renderPlot({
+          values$active.plot
+        })
+      }
     }
   })
   
   observeEvent(input$prev.plot, {
     if (values$num.plots > 0) {
-      values$active.index <- values$num.plots + (values$active.index - 1) %% - values$num.plots
-    
-      values$active.plot <- values$plots[[values$active.index]]
-      
-      output$plot.ui <- renderUI({
-        if (values$active.index == 1) {
-          fluidPage(
-            wellPanel(
-              plotOutput("plot.output")
-            ),
-          
-            fluidRow(
-              column(1,
-                     offset = 10,
-                     actionButton("next.plot",
-                                  "",
-                                  icon = icon("angle-right", "fa-2x"))
-              )
-            )
-          )
-        } else {
-          fluidPage(
-            wellPanel(
-              plotOutput("plot.output")
-            ),
-          
-            fluidRow(
-              column(1,
-                     offset = 1,
-                     actionButton("prev.plot",
-                                  "",
-                                  icon = icon("angle-left", "fa-2x"))
+      if (values$num.fits == 2) {
+        values$active.index <- values$num.plots + (values$active.index - 1) %% (-values$num.plots)
+        values$active.plot  <- values$plots[[values$active.index]]
+        
+        values$active.index2 <- values$num.plots + (values$active.index2 - 1) %% (-values$num.plots)
+        values$active.plot2  <- values$plots2[[values$active.index2]]
+        
+        output$plot.ui <- renderUI({
+          if (values$active.index == 1) {
+            fluidPage(
+              fluidRow(
+                column(6,
+                       plotOutput("plot.output")
+                ),
+                
+                column(6,
+                       plotOutput("plot.output2")
+                )
               ),
               
-              column(1,
-                     offset = 8,
-                     actionButton("next.plot",
-                                  "",
-                                  icon = icon("angle-right", "fa-2x"))
+              fluidRow(
+                column(1,
+                       offset = 10,
+                       actionButton("next.plot",
+                                    "",
+                                    icon = icon("angle-right", "fa-2x"))
+                )
               )
             )
-          )
-        }
-      })
-    
-      output$plot.output <- renderPlot({
-        values$active.plot
-      })
+          } else {
+            fluidPage(
+              fluidRow(
+                column(6,
+                       plotOutput("plot.output")
+                ),
+                
+                column(6,
+                       plotOutput("plot.output2")
+                )
+              ),
+              
+              fluidRow(
+                column(1,
+                       offset = 1,
+                       actionButton("prev.plot",
+                                    "",
+                                    icon = icon("angle-left", "fa-2x"))
+                ),
+                
+                column(1,
+                       offset = 8,
+                       actionButton("next.plot",
+                                    "",
+                                    icon = icon("angle-right", "fa-2x"))
+                )
+              )
+            )
+          }
+        })
+        
+        output$plot.output <- renderPlot({
+          values$active.plot
+        })
+        
+        output$plot.output2 <- renderPlot({
+          values$active.plot2
+        })
+      } else {
+        values$active.index <- values$num.plots + (values$active.index - 1) %% (-values$num.plots)
+      
+        values$active.plot <- values$plots[[values$active.index]]
+        
+        output$plot.ui <- renderUI({
+          if (values$active.index == 1) {
+            fluidPage(
+              wellPanel(
+                plotOutput("plot.output")
+              ),
+            
+              fluidRow(
+                column(1,
+                       offset = 10,
+                       actionButton("next.plot",
+                                    "",
+                                    icon = icon("angle-right", "fa-2x"))
+                )
+              )
+            )
+          } else {
+            fluidPage(
+              wellPanel(
+                plotOutput("plot.output")
+              ),
+            
+              fluidRow(
+                column(1,
+                       offset = 1,
+                       actionButton("prev.plot",
+                                    "",
+                                    icon = icon("angle-left", "fa-2x"))
+                ),
+                
+                column(1,
+                       offset = 8,
+                       actionButton("next.plot",
+                                    "",
+                                    icon = icon("angle-right", "fa-2x"))
+                )
+              )
+            )
+          }
+        })
+      
+        output$plot.output <- renderPlot({
+          values$active.plot
+        })
+      }
     }
   })
 })

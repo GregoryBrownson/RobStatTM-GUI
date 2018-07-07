@@ -156,7 +156,7 @@ shinyUI(navbarPage("RobStatTM",
   
   # Tab for Location/Dispersion
   
-  tabPanel("Location",
+  tabPanel("Location-Scale",
     sidebarLayout(
       sidebarPanel(
         tags$head(tags$style(HTML(CSS.format1))),

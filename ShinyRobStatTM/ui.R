@@ -148,8 +148,7 @@ shinyUI(navbarPage("RobStatTM",
       mainPanel(
         tags$head(tags$style(HTML(CSS.format1))),
         
-        # Create Data table
-        DT::dataTableOutput("contents.table")
+        uiOutput("data.panel")
       )
     )
   ),
@@ -215,7 +214,7 @@ shinyUI(navbarPage("RobStatTM",
               tags$head(tags$script(HTML(JS.onCall))),
               
               selectizeInput("fit.option", "Method",
-                             choices = c("Least Squares", "M", "MM", "Distance Constrained"),
+                             choices = c("LS", "M", "MM", "DCML"),
                              selected = "MM",
                              options = list(maxItems = 2, placeholder = 'Select up to 2 methods')),
               

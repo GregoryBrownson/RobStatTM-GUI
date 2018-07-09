@@ -9,11 +9,16 @@
 
 library(DT)
 library(ggplot2)
+library(grid)
+library(gridExtra)
 library(RobStatTM)
 library(robustbase)
 library(shiny)
 
-theme_set(theme_bw())
+thm <- theme_bw() +
+       theme(plot.title = element_text(hjust = 0.5))
+
+theme_set(thm)
 
 lm <- function(form, ...) {
   fit <- stats::lm(form, ...)
@@ -38,110 +43,6 @@ lmrobdetMM <- function(form, ...) {
   fit$call <- form
   return(fit)
 }
-
-# print.sum.lm <- function(x,
-#                          digits = max(3L, getOption("digits") - 3L),
-#                          symbolic.cor = x$symbolic.cor,
-# 	                       signif.stars = getOption("show.signif.stars"),
-#                          ...) {
-#   # Custom print function for lm summary method
-#   resid <- x$residuals
-#   df    <- x$df
-#   rdf   <- df[2L]
-#   cat(if (!is.null(x$weights) && diff(range(x$weights))) "Weighted ",
-#       "Residuals:\n", sep = "")
-#   if (rdf > 5L) {
-#     nam <- c("Min", "1Q", "Median", "3Q", "Max")
-#     rq <- if (length(dim(resid)) == 2L) {
-#             structure(apply(t(resid), 1L, quantile),
-# 		                  dimnames = list(nam, dimnames(resid)[[2L]]))
-#           } else  {
-#             zz <- zapsmall(quantile(resid), digits + 1L)
-#             structure(zz, names = nam)
-#           }
-#     print(rq, digits = digits, ...)
-#   } else if (rdf > 0L) {
-# 	  print(resid, digits = digits, ...)
-#   } else { # rdf == 0 : perfect fit!
-# 	  cat("ALL", df[1L], "residuals are 0: no residual degrees of freedom!")
-#     cat("\n")
-#   }
-#   
-#   if (length(x$aliased) == 0L) {
-#     cat("\nNo Coefficients\n")
-#   } else {
-#     if (nsingular <- df[3L] - df[1L])
-#         cat("\nCoefficients: (", nsingular,
-#             " not defined because of singularities)\n", sep = "")
-#     else cat("\nCoefficients:\n")
-#     coefs <- x$coefficients
-#     if(!is.null(aliased <- x$aliased) && any(aliased)) {
-#         cn <- names(aliased)
-#         coefs <- matrix(NA, length(aliased), 4, dimnames=list(cn, colnames(coefs)))
-#         coefs[!aliased, ] <- x$coefficients
-#     }
-# 
-#     printCoefmat(coefs, digits = digits, signif.stars = signif.stars,
-#                  na.print = "NA", ...)
-#   }
-#     ##
-#   cat("\nResidual standard error:",
-# 	    format(signif(x$sigma, digits)),
-#       "on",
-#       rdf,
-#       "degrees of freedom")
-#   
-#   cat("\n")
-#   
-#   if(nzchar(mess <- naprint(x$na.action))) cat("  (",mess, ")\n", sep = "")
-#   
-#   if (!is.null(x$fstatistic)) {
-# 	  cat("Multiple R-squared: ", formatC(x$r.squared, digits = digits))
-#     
-# 	  cat(",\tAdjusted R-squared: ",formatC(x$adj.r.squared, digits = digits),
-#   	    "\nF-statistic:", formatC(x$fstatistic[1L], digits = digits),
-#   	    "on", x$fstatistic[2L], "and",
-#   	    x$fstatistic[3L], "DF,  p-value:",
-#   	    format.pval(pf(x$fstatistic[1L], x$fstatistic[2L],
-#                        x$fstatistic[3L], lower.tail = FALSE),
-#                     digits = digits))
-# 	  
-#     cat("\n")
-#   }
-#   
-#   correl <- x$correlation
-#   if (!is.null(correl)) {
-#     p <- NCOL(correl)
-#     if (p > 1L) {
-#         cat("\nCorrelation of Coefficients:\n")
-#         if(is.logical(symbolic.cor) && symbolic.cor) {# NULL < 1.7.0 objects
-#     	  print(symnum(correl, abbr.colnames = NULL))
-#       } else {
-#         correl <- format(round(correl, 2), nsmall = 2, digits = digits)
-#         correl[!lower.tri(correl)] <- ""
-#         print(correl[-1, -p, drop=FALSE], quote = FALSE)
-#       }
-#     }
-#   }
-#   
-#   cat("\n")#- not in S
-#   invisible(x)
-# }
-# 
-# print.sum.MM <- function(fit.summary) {
-#   # Custom print function for lmrobdet summary method
-#   # for MM estimator
-# }
-# 
-# print.sum.M <- function(fit.summary) {
-#   # Custom print function for lmrobdet summary method
-#   # for M estimator
-# }
-# 
-# print.sum.DCML <- function(fit.summary) {
-#   # Custom print function for lmrobdet summary method
-#   # for DCML estimator
-# }
 
 # Back-end implementation of Shiny server
 shinyServer(function(input, output) {
@@ -171,6 +72,19 @@ shinyServer(function(input, output) {
     selectInput("dataset",
                 label   = "Select Dataset",
                 choices = list)
+  })
+  
+  observeEvent(input$display.table, {
+    output$data.panel <- renderUI({
+      fluidPage(
+        fluidRow(
+          column(1, uiOutput("data.info"))
+        ),
+        
+        # Create Data table
+        wellPanel(DT::dataTableOutput("contents.table"))
+      )
+    })
   })
   
   # On-click, load the data and return the data frame
@@ -211,6 +125,16 @@ shinyServer(function(input, output) {
   output$contents.table <- DT::renderDataTable({
     contents_table()
   })
+  
+  observeEvent(input$display.table, {
+    actionLink("more.info", label = "More Info")
+  })
+  
+  observeEvent(input$more.info, {
+    
+  })
+  
+  
   
 ####################
 ## Location/Scale ##
@@ -260,7 +184,7 @@ shinyServer(function(input, output) {
   
   ## Running Regression ##
   
-  values$regress.methods <- c("Least Squares", "M", "MM", "Distance Constrained")
+  values$regress.methods <- c("LS", "M", "MM", "DCML")
   values$regress.models  <- c("lm", "lmrobM", "lmrobdetMM", "lmrobdetDCML")
 
   output$select.dependent.LinRegress <- renderUI({
@@ -383,8 +307,6 @@ shinyServer(function(input, output) {
     
       values$fit1 <- fit[[1]]
       
-      sum.fit <- summary(values$fit1)
-      
       print(summary(values$fit1))
       
       values$num.fits <- length(fit)
@@ -413,19 +335,6 @@ shinyServer(function(input, output) {
                  max = num.obs)
   })
   
-  output$overlaid.plots <- renderUI({
-    if (values$num.fits == 2)
-    {
-      tabPanel("",
-        tags$hr(),
-                
-        h4("Overlaid Plots"),
-        checkboxInput("overlaid.qq", "Residuals Normal QQ", TRUE),
-        checkboxInput("overlaid.residual.density", "Estimated Residual Density", FALSE)
-      )
-    }
-  })
-  
   observeEvent(input$display.plots, {
     plots <- vector(mode = "list")
     
@@ -450,7 +359,7 @@ shinyServer(function(input, output) {
       }
       
       plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                      ggtitle("Residual v. Fitted Values") +
+                      ggtitle(input$fit.option[1]) +
                       xlab("Fitted Values") +
                       ylab("Residuals") +
                       geom_point() +
@@ -467,11 +376,13 @@ shinyServer(function(input, output) {
       i <- i + 1
 
       fit.vals <- fitted(fit)
+      
+      response <- fit$model[, 1]
 
-      dat <- data.frame(X = fit.vals, Y = fit$model[, 1])
+      dat <- data.frame(X = fit.vals, Y = response)
 
       plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                      ggtitle("Response v. Fitted Values") +
+                      ggtitle(input$fit.option[1]) +
                       xlab("Fitted Values") +
                       ylab("Response") +
                       geom_point()
@@ -484,9 +395,6 @@ shinyServer(function(input, output) {
     # QQ Plot
     if (input$qq == T) {
       i <- i + 1
-
-      qqnorm(fit$residuals)
-      qqline(fit$residuals)
 
       dat <- data.frame(Res = sort(fit$residuals))
 
@@ -516,18 +424,18 @@ shinyServer(function(input, output) {
       
       if (input$qq.env == T) {
         plots[[i]] <- ggplot(data = dat, aes(x = z, y = Res)) +
-                        ggtitle("Residual v. Normal QQ Plot") +
+                        ggtitle(input$fit.option[1]) +
                         xlab("Normal Quantiles") +
-                        ylab("Residual Quantiles") +
+                        ylab("Ordered Residuals") +
                         geom_point() +
                         geom_abline(slope = slope, intercept = int) +
                         geom_ribbon(aes(ymin = lower, ymax = upper),
                                     alpha = 0.2)
       } else {
         plots[[i]] <- ggplot(data = dat, aes(sample = Res)) +
-                        ggtitle("Residual v. Normal QQ Plot") +
+                        ggtitle(input$fit.option[1]) +
                         xlab("Normal Quantiles") +
-                        ylab("Residual Quantiles") +
+                        ylab("Ordered Residuals") +
                         geom_qq() +
                         geom_abline(slope = slope, intercept = int)
       }
@@ -539,26 +447,47 @@ shinyServer(function(input, output) {
       
       if (any(class(fit) == "lm")) {
         st.residuals <- rstandard(fit)
+        
+        mat <- model.frame(fit, fit$model)
+        
+        MD <- mahalanobis(x      = mat,
+                          center = colMeans(mat),
+                          cov    = var(mat))
+        
+        chi <- sqrt(qchisq(p = 1 - 0.025, df = fit$rank))
+              
+        dat <- data.frame(X = MD, Y = st.residuals)
+
+        plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
+                         ggtitle(input$fit.option[1]) +
+                         xlab("Distances") +
+                         ylab("Standardized Residuals") +
+                         geom_point() +
+                         geom_hline(yintercept = c(-2.5, 0, 2.5),
+                                    linetype = 2) +
+                         geom_vline(xintercept = chi,
+                                    linetype = 2)
       } else {
         st.residuals <- fit$residuals / fit$scale
-      }
-      chi <- sqrt(qchisq(p = 1 - 0.025, df = fit$rank))
-      
-      MD <- robMD(x         = model.frame(fit, fit$model),
-                  intercept = attr(fit$terms, "intercept"),
-                  wqr       = fit$qr)
+        
+        MD <- robMD(x         = model.frame(fit, fit$model),
+                    intercept = attr(fit$terms, "intercept"),
+                    wqr       = fit$qr)
+        
+        chi <- sqrt(qchisq(p = 1 - 0.025, df = fit$rank))
               
-      dat <- data.frame(X = MD, Y = st.residuals)
+        dat <- data.frame(X = MD, Y = st.residuals)
 
-      plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                      ggtitle("Standardized Residuals v. Robust Distances") +
-                      xlab("Robust Distances") +
-                      ylab("Robust Standardized Residuals") +
-                      geom_point() +
-                      geom_hline(yintercept = c(-2.5, 0, 2.5),
-                                 linetype = 2) + 
-                      geom_vline(xintercept = chi,
-                                 linetype = 2)
+        plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
+                         ggtitle(input$fit.option[1]) +
+                         xlab("Robust Distances") +
+                         ylab("Robustly Standardized Residuals") +
+                         geom_point() +
+                         geom_hline(yintercept = c(-2.5, 0, 2.5),
+                                    linetype = 2) +
+                         geom_vline(xintercept = chi,
+                                    linetype = 2)
+      }
     }
     
     # Estimated residual density
@@ -568,7 +497,7 @@ shinyServer(function(input, output) {
       dat <- data.frame(Res = fit$residuals)
       
       plots[[i]] <- ggplot(data = dat) +
-                      ggtitle("Estimated Residual Density") +
+                      ggtitle(input$fit.option[1]) +
                       xlab("Residuals") +
                       ylab("Density") +
                       geom_histogram(aes(x = Res, y = ..density..),
@@ -581,8 +510,8 @@ shinyServer(function(input, output) {
                                    alpha = 0.1)
       
       if (input$include.rugplot == T) {
-          plots[[i]] <- plots[[i]] + geom_rug()
-        }
+        plots[[i]] <- plots[[i]] + geom_rug()
+      }
     }
     
     # Standardized residuals vs. index values
@@ -591,17 +520,23 @@ shinyServer(function(input, output) {
       
       if (any(class(fit) == "lm")) {
         st.residuals <- rstandard(fit)
+        
+        dat <- data.frame(X = 1:length(st.residuals), Y = st.residuals)
+      
+        plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
+                        ggtitle(input$fit.option[1]) +
+                        ylab("Standardized Residuals") +
+                        geom_point()
       } else {
         st.residuals <- fit$residuals / fit$scale
+        
+        dat <- data.frame(X = 1:length(st.residuals), Y = st.residuals)
+      
+        plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
+                        ggtitle(input$fit.option[1]) +
+                        ylab("Robustly Standardized Residuals") +
+                        geom_point()
       }
-      
-      dat <- data.frame(X = 1:length(st.residuals), Y = st.residuals)
-      
-      plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) + 
-                      ggtitle("Standardized Residuals v. Index") +
-                      xlab("Index") +
-                      ylab("Standardized Residuals") +
-                      geom_point()
     }
     
     ## 2 Regression Case
@@ -630,7 +565,7 @@ shinyServer(function(input, output) {
         }
         
         plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                         ggtitle("Residual v. Fitted Values") +
+                         ggtitle(input$fit.option[2]) +
                          xlab("Fitted Values") +
                          ylab("Residuals") +
                          geom_point() +
@@ -640,6 +575,17 @@ shinyServer(function(input, output) {
         if (input$include.rugplot == T) {
           plots2[[j]] <- plots2[[j]] + geom_rug()
         }
+        
+        p1.build <- ggplot_build(plots[[j]])
+        p2.build <- ggplot_build(plots2[[j]])
+
+        y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        
+        plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
+                                                       expand = c(0, 0))
+        plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
+                                                        expand = c(0, 0))
       }
       
       # Response v. fitted values
@@ -651,7 +597,7 @@ shinyServer(function(input, output) {
         dat <- data.frame(X = fit.vals, Y = fit2$model[, 1])
   
         plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                         ggtitle("Response v. Fitted Values") +
+                         ggtitle(input$fit.option[2]) +
                          xlab("Fitted Values") +
                          ylab("Response") +
                          geom_point()
@@ -659,14 +605,22 @@ shinyServer(function(input, output) {
         if (input$include.rugplot == T) {
           plots2[[j]] <- plots2[[j]] + geom_rug()
         }
+        
+        p1.build <- ggplot_build(plots[[j]])
+        p2.build <- ggplot_build(plots2[[j]])
+
+        y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        
+        plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
+                                                       expand = c(0, 0))
+        plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
+                                                        expand = c(0, 0))
       }
   
       # QQ Plot
       if (input$qq == T) {
         j <- j + 1
-  
-        qqnorm(fit2$residuals)
-        qqline(fit2$residuals)
   
         dat <- data.frame(Res = sort(fit2$residuals))
   
@@ -690,21 +644,32 @@ shinyServer(function(input, output) {
           dat$upper <- fit.vals + zz * SE
           
           plots2[[j]] <- ggplot(data = dat, aes(x = z, y = Res)) +
-                           ggtitle("Residual v. Normal QQ Plot") +
+                           ggtitle(input$fit.option[2]) +
                            xlab("Normal Quantiles") +
-                           ylab("Residual Quantiles") +
+                           ylab("Ordered Residuals") +
                            geom_point() +
                            geom_abline(slope = slope, intercept = int) +
                            geom_ribbon(aes(ymin = lower, ymax = upper),
                                        alpha = 0.2)
         } else {
           plots2[[j]] <- ggplot(data = dat, aes(sample = Res)) +
-                           ggtitle("Residual v. Normal QQ Plot") +
+                           ggtitle(input$fit.option[2]) +
                            xlab("Normal Quantiles") +
-                           ylab("Residual Quantiles") +
+                           ylab("Ordered Residuals") +
                            geom_qq() +
                            geom_abline(slope = slope, intercept = int)
         }
+        
+        p1.build <- ggplot_build(plots[[j]])
+        p2.build <- ggplot_build(plots2[[j]])
+
+        y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        
+        plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
+                                                       expand = c(0, 0))
+        plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
+                                                        expand = c(0, 0))
       }
       
       # Standardized residuals vs. robust distances
@@ -713,26 +678,58 @@ shinyServer(function(input, output) {
         
         if (any(class(fit2) == "lm")) {
           st.residuals <- rstandard(fit2)
+          
+          mat <- model.frame(fit2, fit2$model)
+          
+          MD <- mahalanobis(x      = mat,
+                            center = colMeans(mat),
+                            cov    = var(mat))
+          
+          chi <- sqrt(qchisq(p = 1 - 0.025, df = fit2$rank))
+                
+          dat <- data.frame(X = MD, Y = st.residuals)
+  
+          plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) +
+                           ggtitle(input$fit.option[2]) +
+                           xlab("Distances") +
+                           ylab("Standardized Residuals") +
+                           geom_point() +
+                           geom_hline(yintercept = c(-2.5, 0, 2.5),
+                                      linetype = 2) + 
+                           geom_vline(xintercept = chi,
+                                      linetype = 2)
         } else {
           st.residuals <- fit2$residuals / fit2$scale
-        }
-        chi <- sqrt(qchisq(p = 1 - 0.025, df = fit2$rank))
-        
-        MD <- robMD(x         = model.frame(fit2, fit2$model),
-                    intercept = attr(fit2$terms, "intercept"),
-                    wqr       = fit2$qr)
+          
+          MD <- robMD(x         = model.frame(fit2, fit2$model),
+                      intercept = attr(fit2$terms, "intercept"),
+                      wqr       = fit2$qr)
+          
+          chi <- sqrt(qchisq(p = 1 - 0.025, df = fit2$rank))
                 
-        dat <- data.frame(X = MD, Y = st.residuals)
+          dat <- data.frame(X = MD, Y = st.residuals)
   
-        plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                         ggtitle("Standardized Residuals v. Robust Distances") +
-                         xlab("Robust Distances") +
-                         ylab("Robust Standardized Residuals") +
-                         geom_point() +
-                         geom_hline(yintercept = c(-2.5, 0, 2.5),
-                                    linetype = 2) + 
-                         geom_vline(xintercept = chi,
-                                    linetype = 2)
+          plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) +
+                           ggtitle(input$fit.option[2]) +
+                           xlab("Robust Distances") +
+                           ylab("Robustly Standardized Residuals") +
+                           geom_point() +
+                           geom_hline(yintercept = c(-2.5, 0, 2.5),
+                                      linetype = 2) + 
+                           geom_vline(xintercept = chi,
+                                      linetype = 2)
+        }
+        
+        p1.build <- ggplot_build(plots[[j]])
+        p2.build <- ggplot_build(plots2[[j]])
+
+        y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        
+        plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
+                                                       expand = c(0, 0))
+        plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
+                                                        expand = c(0, 0))
       }
       
       # Estimated residual density
@@ -742,7 +739,7 @@ shinyServer(function(input, output) {
         dat <- data.frame(Res = fit2$residuals)
         
         plots2[[j]] <- ggplot(data = dat) +
-                         ggtitle("Estimated Residual Density") +
+                         ggtitle(input$fit.option[2]) +
                          xlab("Residuals") +
                          ylab("Density") +
                          geom_histogram(aes(x = Res, y = ..density..),
@@ -757,6 +754,17 @@ shinyServer(function(input, output) {
         if (input$include.rugplot == T) {
           plots2[[j]] <- plots2[[j]] + geom_rug()
         }
+        
+        p1.build <- ggplot_build(plots[[j]])
+        p2.build <- ggplot_build(plots2[[j]])
+
+        y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        
+        plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
+                                                       expand = c(0, 0))
+        plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
+                                                        expand = c(0, 0))
       }
       
       # Standardized residuals vs. index values
@@ -765,17 +773,34 @@ shinyServer(function(input, output) {
         
         if (any(class(fit2) == "lm")) {
           st.residuals <- rstandard(fit2)
+          
+          dat <- data.frame(X = 1:length(st.residuals), Y = st.residuals)
+        
+          plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) + 
+                           ggtitle(input$fit.option[2]) +
+                           ylab("Standardized Residuals") +
+                           geom_point()
         } else {
           st.residuals <- fit2$residuals / fit2$scale
+          
+          dat <- data.frame(X = 1:length(st.residuals), Y = st.residuals)
+        
+          plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) + 
+                           ggtitle(input$fit.option[2]) +
+                           ylab("Robustly Standardized Residuals") +
+                           geom_point()
         }
         
-        dat <- data.frame(X = 1:length(st.residuals), Y = st.residuals)
+        p1.build <- ggplot_build(plots[[j]])
+        p2.build <- ggplot_build(plots2[[j]])
+
+        y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         
-        plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) + 
-                         ggtitle("Standardized Residuals v. Index") +
-                         xlab("Index") +
-                         ylab("Standardized Residuals") +
-                         geom_point()
+        plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
+                                                       expand = c(0, 0))
+        plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
+                                                        expand = c(0, 0))
       }
       
       if (i == 0) {
@@ -800,14 +825,8 @@ shinyServer(function(input, output) {
         if (i > 1) {
           output$plot.ui <- renderUI({
             fluidPage(
-              fluidRow(
-                column(6,
-                  plotOutput("plot.output")
-                ),
-                
-                column(6,
-                  plotOutput("plot.output2")
-                )
+              wellPanel(
+                plotOutput("plot.output")
               ),
               
               fluidRow(
@@ -823,25 +842,15 @@ shinyServer(function(input, output) {
         } else {
           output$plot.ui <- renderUI({
             fluidPage(
-              fluidRow(
-                column(6,
-                       plotOutput("plot.output")
-                ),
-                
-                column(6,
-                       plotOutput("plot.output2")
-                )
+              wellPanel(
+                plotOutput("plot.output")
               )
             )
           })
         }
         
         output$plot.output <- renderPlot({
-          values$active.plot
-        })
-        
-        output$plot.output2 <- renderPlot({
-          values$active.plot2
+          grid.draw(cbind(ggplotGrob(values$active.plot), ggplotGrob(values$active.plot2), size = "last"))
         })
       }
     } else {
@@ -905,14 +914,8 @@ shinyServer(function(input, output) {
         output$plot.ui <- renderUI({
           if (values$active.index == values$num.plots) {
             fluidPage(
-              fluidRow(
-                column(6,
-                       plotOutput("plot.output")
-                ),
-                
-                column(6,
-                       plotOutput("plot.output2")
-                )
+              wellPanel(
+                plotOutput("plot.output")
               ),
               
               fluidRow(
@@ -926,14 +929,8 @@ shinyServer(function(input, output) {
             )
           } else {
             fluidPage(
-              fluidRow(
-                column(6,
-                       plotOutput("plot.output")
-                ),
-                
-                column(6,
-                       plotOutput("plot.output2")
-                )
+              wellPanel(
+                plotOutput("plot.output")
               ),
               
               fluidRow(
@@ -956,11 +953,7 @@ shinyServer(function(input, output) {
         })
         
         output$plot.output <- renderPlot({
-          values$active.plot
-        })
-        
-        output$plot.output2 <- renderPlot({
-          values$active.plot2
+          grid.draw(cbind(ggplotGrob(values$active.plot), ggplotGrob(values$active.plot2), size = "last"))
         })
       } else {
         
@@ -1028,14 +1021,8 @@ shinyServer(function(input, output) {
         output$plot.ui <- renderUI({
           if (values$active.index == 1) {
             fluidPage(
-              fluidRow(
-                column(6,
-                       plotOutput("plot.output")
-                ),
-                
-                column(6,
-                       plotOutput("plot.output2")
-                )
+              wellPanel(
+                plotOutput("plot.output")
               ),
               
               fluidRow(
@@ -1049,14 +1036,8 @@ shinyServer(function(input, output) {
             )
           } else {
             fluidPage(
-              fluidRow(
-                column(6,
-                       plotOutput("plot.output")
-                ),
-                
-                column(6,
-                       plotOutput("plot.output2")
-                )
+              wellPanel(
+                plotOutput("plot.output")
               ),
               
               fluidRow(
@@ -1079,11 +1060,7 @@ shinyServer(function(input, output) {
         })
         
         output$plot.output <- renderPlot({
-          values$active.plot
-        })
-        
-        output$plot.output2 <- renderPlot({
-          values$active.plot2
+          grid.draw(cbind(ggplotGrob(values$active.plot), ggplotGrob(values$active.plot2), size = "last"))
         })
       } else {
         values$active.index <- values$num.plots + (values$active.index - 1) %% (-values$num.plots)

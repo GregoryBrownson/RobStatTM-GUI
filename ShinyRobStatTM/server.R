@@ -11,9 +11,11 @@ library(DT)
 library(ggplot2)
 library(grid)
 library(gridExtra)
+library(PerformanceAnalytics)
 library(RobStatTM)
 library(robustbase)
 library(shiny)
+library(vcdExtra)
 
 thm <- theme_bw() +
        theme(plot.title = element_text(hjust = 0.5))
@@ -63,7 +65,7 @@ shinyServer(function(input, output) {
     }
     
     # List of datasets
-    list <- data(package = input$library)$results[, "Item"]
+    lst <- data(package = input$library)$results[, "Item"]
     
     # Get info on datasets
     values$data.info <- vcdExtra::datasets(input$library)
@@ -71,7 +73,7 @@ shinyServer(function(input, output) {
     # Create selection for datasets
     selectInput("dataset",
                 label   = "Select Dataset",
-                choices = list)
+                choices = lst)
   })
   
   observeEvent(input$display.table, {
@@ -358,8 +360,10 @@ shinyServer(function(input, output) {
         sigma <- fit$scale
       }
       
+      title.name <- ifelse(any(class(fit) == "lm"), input$fit.option[1], paste("Robust ", input$fit.option[1]))
+      
       plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                      ggtitle(input$fit.option[1]) +
+                      ggtitle(title.name) +
                       xlab("Fitted Values") +
                       ylab("Residuals") +
                       geom_point() +
@@ -380,9 +384,11 @@ shinyServer(function(input, output) {
       response <- fit$model[, 1]
 
       dat <- data.frame(X = fit.vals, Y = response)
+      
+      title.name <- ifelse(any(class(fit) == "lm"), input$fit.option[1], paste("Robust ", input$fit.option[1]))
 
       plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                      ggtitle(input$fit.option[1]) +
+                      ggtitle(title.name) +
                       xlab("Fitted Values") +
                       ylab("Response") +
                       geom_point()
@@ -397,6 +403,8 @@ shinyServer(function(input, output) {
       i <- i + 1
 
       dat <- data.frame(Res = sort(fit$residuals))
+      
+      title.name <- ifelse(any(class(fit) == "lm"), input$fit.option[1], paste("Robust ", input$fit.option[1]))
 
       # Calculate slope and intercept for qqline
       
@@ -424,7 +432,7 @@ shinyServer(function(input, output) {
       
       if (input$qq.env == T) {
         plots[[i]] <- ggplot(data = dat, aes(x = z, y = Res)) +
-                        ggtitle(input$fit.option[1]) +
+                        ggtitle(title.name) +
                         xlab("Normal Quantiles") +
                         ylab("Ordered Residuals") +
                         geom_point() +
@@ -433,7 +441,7 @@ shinyServer(function(input, output) {
                                     alpha = 0.2)
       } else {
         plots[[i]] <- ggplot(data = dat, aes(sample = Res)) +
-                        ggtitle(input$fit.option[1]) +
+                        ggtitle(title.name) +
                         xlab("Normal Quantiles") +
                         ylab("Ordered Residuals") +
                         geom_qq() +
@@ -444,6 +452,8 @@ shinyServer(function(input, output) {
     # Standardized residuals vs. robust distances
     if (input$stdResidual.RobustDist == T) {
       i <- i + 1
+      
+      title.name <- ifelse(any(class(fit) == "lm"), input$fit.option[1], paste("Robust ", input$fit.option[1]))
       
       if (any(class(fit) == "lm")) {
         st.residuals <- rstandard(fit)
@@ -459,7 +469,7 @@ shinyServer(function(input, output) {
         dat <- data.frame(X = MD, Y = st.residuals)
 
         plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                         ggtitle(input$fit.option[1]) +
+                         ggtitle(title.name) +
                          xlab("Distances") +
                          ylab("Standardized Residuals") +
                          geom_point() +
@@ -479,7 +489,7 @@ shinyServer(function(input, output) {
         dat <- data.frame(X = MD, Y = st.residuals)
 
         plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                         ggtitle(input$fit.option[1]) +
+                         ggtitle(title.name) +
                          xlab("Robust Distances") +
                          ylab("Robustly Standardized Residuals") +
                          geom_point() +
@@ -496,8 +506,10 @@ shinyServer(function(input, output) {
       
       dat <- data.frame(Res = fit$residuals)
       
+      title.name <- ifelse(any(class(fit) == "lm"), input$fit.option[1], paste("Robust ", input$fit.option[1]))
+      
       plots[[i]] <- ggplot(data = dat) +
-                      ggtitle(input$fit.option[1]) +
+                      ggtitle(title.name) +
                       xlab("Residuals") +
                       ylab("Density") +
                       geom_histogram(aes(x = Res, y = ..density..),
@@ -518,13 +530,15 @@ shinyServer(function(input, output) {
     if (input$stdResidual.Index == T) {
       i <- i + 1
       
+      title.name <- ifelse(any(class(fit) == "lm"), input$fit.option[1], paste("Robust ", input$fit.option[1]))
+      
       if (any(class(fit) == "lm")) {
         st.residuals <- rstandard(fit)
         
         dat <- data.frame(X = 1:length(st.residuals), Y = st.residuals)
       
         plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                        ggtitle(input$fit.option[1]) +
+                        ggtitle(title.name) +
                         ylab("Standardized Residuals") +
                         geom_point()
       } else {
@@ -533,7 +547,7 @@ shinyServer(function(input, output) {
         dat <- data.frame(X = 1:length(st.residuals), Y = st.residuals)
       
         plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                        ggtitle(input$fit.option[1]) +
+                        ggtitle(title.name) +
                         ylab("Robustly Standardized Residuals") +
                         geom_point()
       }
@@ -554,7 +568,9 @@ shinyServer(function(input, output) {
         
         fit.vals <- fitted(fit2)
         
-        dat <- data.frame(X = fit.vals, Y = fit$residuals)
+        dat <- data.frame(X = fit.vals, Y = fit2$residuals)
+        
+        title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
         
         sigma <- 1
         
@@ -565,7 +581,7 @@ shinyServer(function(input, output) {
         }
         
         plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                         ggtitle(input$fit.option[2]) +
+                         ggtitle(title.name) +
                          xlab("Fitted Values") +
                          ylab("Residuals") +
                          geom_point() +
@@ -578,14 +594,21 @@ shinyServer(function(input, output) {
         
         p1.build <- ggplot_build(plots[[j]])
         p2.build <- ggplot_build(plots2[[j]])
+        
+        x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
+        x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
 
         y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                       expand = c(0, 0))
+                                                       expand = c(0, 0)) +
+                        scale_x_continuous(limits = c(x.min, x.max),
+                                                      expand = c(0, 0))
         plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                        expand = c(0, 0))
+                                                        expand = c(0, 0)) +
+                        scale_x_continuous(limits = c(x.min, x.max),
+                                                      expand = c(0, 0))
       }
       
       # Response v. fitted values
@@ -595,9 +618,11 @@ shinyServer(function(input, output) {
         fit.vals <- fitted(fit2)
   
         dat <- data.frame(X = fit.vals, Y = fit2$model[, 1])
+        
+        title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
   
         plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                         ggtitle(input$fit.option[2]) +
+                         ggtitle(title.name) +
                          xlab("Fitted Values") +
                          ylab("Response") +
                          geom_point()
@@ -608,14 +633,21 @@ shinyServer(function(input, output) {
         
         p1.build <- ggplot_build(plots[[j]])
         p2.build <- ggplot_build(plots2[[j]])
+        
+        x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
+        x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
 
         y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                       expand = c(0, 0))
+                                                       expand = c(0, 0)) +
+                        scale_x_continuous(limits = c(x.min, x.max),
+                                                      expand = c(0, 0))
         plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                        expand = c(0, 0))
+                                                        expand = c(0, 0)) +
+                        scale_x_continuous(limits = c(x.min, x.max),
+                                                      expand = c(0, 0))
       }
   
       # QQ Plot
@@ -623,6 +655,8 @@ shinyServer(function(input, output) {
         j <- j + 1
   
         dat <- data.frame(Res = sort(fit2$residuals))
+        
+        title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
   
         # Calculate slope and intercept for qqline 
         y     <- quantile(fit2$residuals, c(0.25, 0.75), type=5)
@@ -644,7 +678,7 @@ shinyServer(function(input, output) {
           dat$upper <- fit.vals + zz * SE
           
           plots2[[j]] <- ggplot(data = dat, aes(x = z, y = Res)) +
-                           ggtitle(input$fit.option[2]) +
+                           ggtitle(title.name) +
                            xlab("Normal Quantiles") +
                            ylab("Ordered Residuals") +
                            geom_point() +
@@ -653,7 +687,7 @@ shinyServer(function(input, output) {
                                        alpha = 0.2)
         } else {
           plots2[[j]] <- ggplot(data = dat, aes(sample = Res)) +
-                           ggtitle(input$fit.option[2]) +
+                           ggtitle(title.name) +
                            xlab("Normal Quantiles") +
                            ylab("Ordered Residuals") +
                            geom_qq() +
@@ -662,35 +696,44 @@ shinyServer(function(input, output) {
         
         p1.build <- ggplot_build(plots[[j]])
         p2.build <- ggplot_build(plots2[[j]])
+        
+        x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
+        x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
 
         y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                       expand = c(0, 0))
+                                                       expand = c(0, 0)) +
+                        scale_x_continuous(limits = c(x.min, x.max),
+                                                      expand = c(0, 0))
         plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                        expand = c(0, 0))
+                                                        expand = c(0, 0)) +
+                        scale_x_continuous(limits = c(x.min, x.max),
+                                                      expand = c(0, 0))
       }
       
       # Standardized residuals vs. robust distances
       if (input$stdResidual.RobustDist == T) {
         j <- j + 1
         
+        title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
+        
         if (any(class(fit2) == "lm")) {
           st.residuals <- rstandard(fit2)
           
           mat <- model.frame(fit2, fit2$model)
           
-          MD <- mahalanobis(x      = mat,
-                            center = colMeans(mat),
-                            cov    = var(mat))
+          MD <- sqrt(mahalanobis(x      = mat,
+                                 center = colMeans(mat),
+                                 cov    = var(mat)))
           
           chi <- sqrt(qchisq(p = 1 - 0.025, df = fit2$rank))
                 
           dat <- data.frame(X = MD, Y = st.residuals)
   
           plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                           ggtitle(input$fit.option[2]) +
+                           ggtitle(title.name) +
                            xlab("Distances") +
                            ylab("Standardized Residuals") +
                            geom_point() +
@@ -710,7 +753,7 @@ shinyServer(function(input, output) {
           dat <- data.frame(X = MD, Y = st.residuals)
   
           plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                           ggtitle(input$fit.option[2]) +
+                           ggtitle(title.name) +
                            xlab("Robust Distances") +
                            ylab("Robustly Standardized Residuals") +
                            geom_point() +
@@ -722,14 +765,21 @@ shinyServer(function(input, output) {
         
         p1.build <- ggplot_build(plots[[j]])
         p2.build <- ggplot_build(plots2[[j]])
+        
+        x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
+        x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
 
         y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                       expand = c(0, 0))
+                                                       expand = c(0, 0)) +
+                        scale_x_continuous(limits = c(x.min, x.max),
+                                                      expand = c(0, 0))
         plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                        expand = c(0, 0))
+                                                        expand = c(0, 0)) +
+                        scale_x_continuous(limits = c(x.min, x.max),
+                                                      expand = c(0, 0))
       }
       
       # Estimated residual density
@@ -738,8 +788,10 @@ shinyServer(function(input, output) {
         
         dat <- data.frame(Res = fit2$residuals)
         
+        title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
+        
         plots2[[j]] <- ggplot(data = dat) +
-                         ggtitle(input$fit.option[2]) +
+                         ggtitle(title.name) +
                          xlab("Residuals") +
                          ylab("Density") +
                          geom_histogram(aes(x = Res, y = ..density..),
@@ -757,19 +809,26 @@ shinyServer(function(input, output) {
         
         p1.build <- ggplot_build(plots[[j]])
         p2.build <- ggplot_build(plots2[[j]])
+        
+        x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
+        x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
 
         y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                       expand = c(0, 0))
+                                                       expand = c(0, 0)) +
+                        scale_x_continuous(limits = c(x.min, x.max))
         plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                        expand = c(0, 0))
+                                                        expand = c(0, 0)) +
+                        scale_x_continuous(limits = c(x.min, x.max))
       }
       
       # Standardized residuals vs. index values
       if (input$stdResidual.Index == T) {
         j <- j + 1
+        
+        title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
         
         if (any(class(fit2) == "lm")) {
           st.residuals <- rstandard(fit2)
@@ -777,7 +836,7 @@ shinyServer(function(input, output) {
           dat <- data.frame(X = 1:length(st.residuals), Y = st.residuals)
         
           plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) + 
-                           ggtitle(input$fit.option[2]) +
+                           ggtitle(title.name) +
                            ylab("Standardized Residuals") +
                            geom_point()
         } else {
@@ -786,21 +845,28 @@ shinyServer(function(input, output) {
           dat <- data.frame(X = 1:length(st.residuals), Y = st.residuals)
         
           plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) + 
-                           ggtitle(input$fit.option[2]) +
+                           ggtitle(title.name) +
                            ylab("Robustly Standardized Residuals") +
                            geom_point()
         }
         
         p1.build <- ggplot_build(plots[[j]])
         p2.build <- ggplot_build(plots2[[j]])
+        
+        x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
+        x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
 
         y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                       expand = c(0, 0))
+                                                       expand = c(0, 0)) +
+                        scale_x_continuous(limits = c(x.min, x.max),
+                                                      expand = c(0, 0))
         plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                        expand = c(0, 0))
+                                                        expand = c(0, 0)) +
+                        scale_x_continuous(limits = c(x.min, x.max),
+                                                      expand = c(0, 0))
       }
       
       if (i == 0) {
@@ -902,6 +968,7 @@ shinyServer(function(input, output) {
     }
   })
   
+  # On button press, show next plot(s)
   observeEvent(input$next.plot, {
     if (values$num.plots > 0) {
       if (values$num.fits == 2) {
@@ -1009,6 +1076,7 @@ shinyServer(function(input, output) {
     }
   })
   
+  # On button press, move to previous plot(s)
   observeEvent(input$prev.plot, {
     if (values$num.plots > 0) {
       if (values$num.fits == 2) {

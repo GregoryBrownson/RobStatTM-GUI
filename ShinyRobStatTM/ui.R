@@ -83,6 +83,8 @@ Next_Button <- HTML(
     <div class="col-sm-4"><i class="fa fa-angle-right fa-2x"></i></div>
   ')
 
+pkgs <- c("RobStatTM", "robustbase", "PerformanceAnalytics")
+
 # Define UI for Shiny Application
 shinyUI(navbarPage("RobStatTM",
   
@@ -132,8 +134,7 @@ shinyUI(navbarPage("RobStatTM",
           condition = "input.source == 'library'",
           # Selection of R packages
           selectInput("library", "Library Name",
-                      choices = c(RobStatTM  = "RobStatTM",
-                                  robustbase = "robustbase"),
+                      choices = pkgs,
                       selected = "RobStatTM"),
           
           # Render UI given package selected

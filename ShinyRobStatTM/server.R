@@ -15,6 +15,7 @@ library(PerformanceAnalytics)
 library(RobStatTM)
 library(robustbase)
 library(shiny)
+library(vcd)
 library(vcdExtra)
 
 thm <- theme_bw() +
@@ -65,7 +66,7 @@ shinyServer(function(input, output) {
     }
     
     # List of datasets
-    lst <- data(package = input$library)$results[, "Item"]
+    lst <- data(package = input$library)
     
     # Get info on datasets
     values$data.info <- vcdExtra::datasets(input$library)
@@ -73,7 +74,7 @@ shinyServer(function(input, output) {
     # Create selection for datasets
     selectInput("dataset",
                 label   = "Select Dataset",
-                choices = lst)
+                choices = lst$results[, "Item"])
   })
   
   observeEvent(input$display.table, {
@@ -250,8 +251,7 @@ shinyServer(function(input, output) {
                                   "Optimal"   = "optimal",
                                   "Modified Optimal" = "modified.optimal")),
           
-          selectInput("eff.regress", "Efficiency",
-                      choices = c("0.85", "0.90", "0.95")),
+          numericInput("eff.regress", "Efficiency", value = 0.85, min = 0.80, max = 0.99, step = 0.01),
         
           tags$hr()
       )
@@ -480,9 +480,7 @@ shinyServer(function(input, output) {
       } else {
         st.residuals <- fit$residuals / fit$scale
         
-        MD <- robMD(x         = model.frame(fit, fit$model),
-                    intercept = attr(fit$terms, "intercept"),
-                    wqr       = fit$qr)
+        MD <- fit$MD
         
         chi <- sqrt(qchisq(p = 1 - 0.025, df = fit$rank))
               
@@ -744,9 +742,7 @@ shinyServer(function(input, output) {
         } else {
           st.residuals <- fit2$residuals / fit2$scale
           
-          MD <- robMD(x         = model.frame(fit2, fit2$model),
-                      intercept = attr(fit2$terms, "intercept"),
-                      wqr       = fit2$qr)
+          MD <- fit2$MD
           
           chi <- sqrt(qchisq(p = 1 - 0.025, df = fit2$rank))
                 

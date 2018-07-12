@@ -203,10 +203,10 @@ shinyUI(navbarPage("RobStatTM",
              
     ## Linear Regression ##
     tabPanel("Linear Regression",
-      tabsetPanel(type = "tabs",
+      tabsetPanel(id = "linear.tabs", type = "tabs",
                   
         # Model selection
-        tabPanel("Model",
+        tabPanel(title = "Model", value = "linear.model",
           sidebarLayout(
             sidebarPanel(
               tags$head(tags$style(HTML(CSS.format1))),
@@ -244,7 +244,7 @@ shinyUI(navbarPage("RobStatTM",
         ),
         
         # Plot selection
-        tabPanel("Plotting",
+        tabPanel(title = "Plotting", value = "linear.plotting",
           sidebarLayout(
             sidebarPanel(
               tags$head(tags$style(HTML(CSS.format1))),
@@ -291,6 +291,10 @@ shinyUI(navbarPage("RobStatTM",
           )
         )
       )
-    )
+    ),
+    
+    tabPanel("Robust Covariance"),
+    
+    tabPanel("PCA")
   )
 ))

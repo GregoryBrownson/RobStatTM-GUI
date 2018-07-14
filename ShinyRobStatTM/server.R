@@ -15,6 +15,7 @@ library(PerformanceAnalytics)
 library(RobStatTM)
 library(robustbase)
 library(shiny)
+library(shinyjs)
 library(vcd)
 library(vcdExtra)
 
@@ -52,6 +53,9 @@ shinyServer(function(input, output) {
   
   # Need this to store reactive objects
   values <- reactiveValues()
+  
+  values$regress.active <- F
+  values$plots.active <- F
   
 ####################  
 ## Data Selection ##
@@ -248,10 +252,11 @@ shinyServer(function(input, output) {
           
           selectInput("family.regress", "Family",
                       choices = c("Bi-square" = "bisquare",
-                                  "Optimal"   = "optimal",
-                                  "Modified Optimal" = "modified.optimal")),
+                                  "Opt."   = "optimal",
+                                  "Mod. Opt." = "modified.optimal"),
+                      selected = "modified.optimal"),
           
-          numericInput("eff.regress", "Efficiency", value = 0.85, min = 0.80, max = 0.99, step = 0.01),
+          numericInput("eff.regress", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01),
         
           tags$hr()
       )
@@ -304,6 +309,8 @@ shinyServer(function(input, output) {
   })
   
   output$results.LinRegress <- renderPrint({
+    values$regress.active <- T
+    
     if (is.numeric(values$dat[, input$dependent.var.LinRegress])) {
       fit <- run_regression()
     
@@ -338,6 +345,8 @@ shinyServer(function(input, output) {
   })
   
   observeEvent(input$display.plots, {
+    values$plots.active <- T
+    
     plots <- vector(mode = "list")
     
     i <- 0
@@ -1176,6 +1185,31 @@ shinyServer(function(input, output) {
           values$active.plot
         })
       }
+    }
+  })
+  
+  observeEvent(input$display.table, {
+    if (values$regress.active) {
+      output$results.LinRegress <- renderPrint({ invisible() })
+      
+      values$regress.active <- F
+    }
+    
+    if (values$plots.active) {
+      output$plot.ui <- renderUI({ invisible() })
+      
+      values$plots.active <- F
+    }
+    
+    updateTabsetPanel(session = getDefaultReactiveDomain(), "linear.tabs",
+                      selected = "linear.model")
+  })
+  
+  observeEvent(input$display.LinRegress, {
+    if (values$plots.active) {
+      output$plot.ui <- renderUI({ invisible() })
+      
+      values$plots.active <- F
     }
   })
 })

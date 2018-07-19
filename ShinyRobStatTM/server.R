@@ -52,7 +52,7 @@ shinyServer(function(input, output) {
   values <- reactiveValues()
   
   values$regress.active <- F
-  values$plots.active <- F
+  values$linRegress.plots.active <- F
   
 ####################  
 ## Data Selection ##
@@ -237,7 +237,7 @@ shinyServer(function(input, output) {
               formula.str)
   })
   
-  output$robust.control <- renderUI({
+  output$linRegress.robust.control <- renderUI({
     if (any(input$fit.option != "LS")) {
       fl.mult.selected <- F
       
@@ -291,7 +291,7 @@ shinyServer(function(input, output) {
     }
   })
   
-  run_regression <- eventReactive(input$display.LinRegress, {
+  run_regression <- eventReactive(input$linRegress.display, {
     if (is.null(input$independent.var.LinRegress)) {
       return(NULL)
     } else if (!is.numeric(input$independent.var.LinRegress)) {
@@ -334,13 +334,13 @@ shinyServer(function(input, output) {
     return(fit)
   })
   
-  invalid_response <- eventReactive(input$display.LinRegress, {
+  invalid_response <- eventReactive(input$linRegress.display, {
     return(paste("ERROR: Response variable is of",
                  class(values$dat[, input$dependent.var.LinRegress]),
                  "type. Please select a response variable with numeric values"))
   })
   
-  output$results.LinRegress <- renderPrint({
+  output$linRegress.results <- renderPrint({
     values$regress.active <- T
     
     if (is.numeric(values$dat[, input$dependent.var.LinRegress])) {
@@ -388,7 +388,7 @@ shinyServer(function(input, output) {
   })
   
   observeEvent(input$display.plots, {
-    values$plots.active <- T
+    values$linRegress.plots.active <- T
     
     plots <- vector(mode = "list")
     
@@ -502,7 +502,7 @@ shinyServer(function(input, output) {
     }
     
     # Standardized residuals vs. robust distances
-    if (input$stdResidual.RobustDist == T) {
+    if (input$linRegress.resid.dist == T) {
       i <- i + 1
       
       title.name <- ifelse(any(class(fit) == "lm"), input$fit.option[1], paste("Robust ", input$fit.option[1]))
@@ -583,7 +583,7 @@ shinyServer(function(input, output) {
     }
     
     # Standardized residuals vs. index values
-    if (input$stdResidual.Index == T) {
+    if (input$linRegress.resid.index == T) {
       i <- i + 1
       
       title.name <- ifelse(any(class(fit) == "lm"), input$fit.option[1], paste("Robust ", input$fit.option[1]))
@@ -784,7 +784,7 @@ shinyServer(function(input, output) {
       }
       
       # Standardized residuals vs. robust distances
-      if (input$stdResidual.RobustDist == T) {
+      if (input$linRegress.resid.dist == T) {
         j <- j + 1
         
         title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
@@ -905,7 +905,7 @@ shinyServer(function(input, output) {
       }
       
       # Standardized residuals vs. index values
-      if (input$stdResidual.Index == T) {
+      if (input$linRegress.resid.index == T) {
         j <- j + 1
         
         title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
@@ -999,22 +999,22 @@ shinyServer(function(input, output) {
           )
         })
       } else {
-        values$plots        <- plots
-        values$num.plots    <- j
-        values$active.index <- 1
-        values$active.plot  <- plots[[1]]
+        values$linRegress.plots        <- plots
+        values$linRegress.num.plots    <- j
+        values$linRegress.active.index <- 1
+        values$linRegress.active.plot  <- plots[[1]]
         
         if (i > 1) {
           output$linRegress.plot.ui <- renderUI({
             fluidPage(
               wellPanel(
-                plotOutput("plot.output")
+                plotOutput("linRegress.plot.output")
               ),
               
               fluidRow(
                 column(1,
                        offset = 10,
-                       actionButton("next.plot",
+                       actionButton("linRegress.next.plot",
                                     "",
                                     icon = icon("angle-right", "fa-2x"))
                 )
@@ -1025,14 +1025,14 @@ shinyServer(function(input, output) {
           output$linRegress.plot.ui <- renderUI({
             fluidPage(
               wellPanel(
-                plotOutput("plot.output")
+                plotOutput("linRegress.plot.output")
               )
             )
           })
         }
         
-        output$plot.output <- renderPlot({
-          grid.draw(values$active.plot)
+        output$linRegress.plot.output <- renderPlot({
+          grid.draw(values$linRegress.active.plot)
         })
       }
     } else {
@@ -1041,22 +1041,22 @@ shinyServer(function(input, output) {
           fluidPage(verbatimTextOutput("no.selection"))
         })
       } else {
-        values$plots        <- plots
-        values$num.plots    <- i
-        values$active.index <- 1
-        values$active.plot  <- plots[[1]]
+        values$linRegress.plots        <- plots
+        values$linRegress.num.plots    <- i
+        values$linRegress.active.index <- 1
+        values$linRegress.active.plot  <- plots[[1]]
         
         if (i > 1) {
           output$linRegress.plot.ui <- renderUI({
             fluidPage(
               wellPanel(
-                plotOutput("plot.output")
+                plotOutput("linRegress.plot.output")
               ),
               
               fluidRow(
                 column(1,
                        offset = 10,
-                       actionButton("next.plot",
+                       actionButton("linRegress.next.plot",
                                     "",
                                     icon = icon("angle-right", "fa-2x"))
                 )
@@ -1067,14 +1067,14 @@ shinyServer(function(input, output) {
           output$linRegress.plot.ui <- renderUI({
             fluidPage(
               wellPanel(
-                plotOutput("plot.output")
+                plotOutput("linRegress.plot.output")
               )
             )
           })
         }
         
-        output$plot.output <- renderPlot({
-          values$active.plot
+        output$linRegress.plot.output <- renderPlot({
+          values$linRegress.active.plot
         })
       }
     }
@@ -1085,23 +1085,23 @@ shinyServer(function(input, output) {
   })
   
   # On button press, show next plot(s)
-  observeEvent(input$next.plot, {
-    if (values$num.plots > 0) {
+  observeEvent(input$linRegress.next.plot, {
+    if (values$linRegress.num.plots > 0) {
       if (values$num.fits == 2) {
-        values$active.index <- values$active.index %% values$num.plots + 1
-        values$active.plot  <- values$plots[[values$active.index]]
+        values$linRegress.active.index <- values$linRegress.active.index %% values$linRegress.num.plots + 1
+        values$linRegress.active.plot  <- values$linRegress.plots[[values$linRegress.active.index]]
         
         output$linRegress.plot.ui <- renderUI({
-          if (values$active.index == values$num.plots) {
+          if (values$linRegress.active.index == values$linRegress.num.plots) {
             fluidPage(
               wellPanel(
-                plotOutput("plot.output")
+                plotOutput("linRegress.plot.output")
               ),
               
               fluidRow(
                 column(1,
                        offset = 1,
-                       actionButton("prev.plot",
+                       actionButton("linRegress.prev.plot",
                                     "",
                                     icon = icon("angle-left", "fa-2x"))
                 )
@@ -1110,20 +1110,20 @@ shinyServer(function(input, output) {
           } else {
             fluidPage(
               wellPanel(
-                plotOutput("plot.output")
+                plotOutput("linRegress.plot.output")
               ),
               
               fluidRow(
                 column(1,
                        offset = 1,
-                       actionButton("prev.plot",
+                       actionButton("linRegress.prev.plot",
                                     "",
                                     icon = icon("angle-left", "fa-2x"))
                 ),
                 
                 column(1,
                        offset = 8,
-                       actionButton("next.plot",
+                       actionButton("linRegress.next.plot",
                                     "",
                                     icon = icon("angle-right", "fa-2x"))
                 )
@@ -1132,26 +1132,26 @@ shinyServer(function(input, output) {
           }
         })
         
-        output$plot.output <- renderPlot({
-          grid.draw(values$active.plot)
+        output$linRegress.plot.output <- renderPlot({
+          grid.draw(values$linRegress.active.plot)
         })
       } else {
         
-        values$active.index <- values$active.index %% values$num.plots + 1
+        values$linRegress.active.index <- values$linRegress.active.index %% values$linRegress.num.plots + 1
       
-        values$active.plot <- values$plots[[values$active.index]]
+        values$linRegress.active.plot <- values$linRegress.plots[[values$linRegress.active.index]]
         
         output$linRegress.plot.ui <- renderUI({
-          if (values$active.index == values$num.plots) {
+          if (values$linRegress.active.index == values$linRegress.num.plots) {
             fluidPage(
               wellPanel(
-                plotOutput("plot.output")
+                plotOutput("linRegress.plot.output")
               ),
             
               fluidRow(
                 column(1,
                        offset = 1,
-                       actionButton("prev.plot",
+                       actionButton("linRegress.prev.plot",
                                     "",
                                     icon = icon("angle-left", "fa-2x"))
                 )
@@ -1160,20 +1160,20 @@ shinyServer(function(input, output) {
           } else {
             fluidPage(
               wellPanel(
-                plotOutput("plot.output")
+                plotOutput("linRegress.plot.output")
               ),
             
               fluidRow(
                 column(1,
                        offset = 1,
-                       actionButton("prev.plot",
+                       actionButton("linRegress.prev.plot",
                                     "",
                                     icon = icon("angle-left", "fa-2x"))
                 ),
                 
                 column(1,
                        offset = 8,
-                       actionButton("next.plot",
+                       actionButton("linRegress.next.plot",
                                     "",
                                     icon = icon("angle-right", "fa-2x"))
                 )
@@ -1182,31 +1182,31 @@ shinyServer(function(input, output) {
           }
         })
       
-        output$plot.output <- renderPlot({
-          values$active.plot
+        output$linRegress.plot.output <- renderPlot({
+          values$linRegress.active.plot
         })
       }
     }
   })
   
   # On button press, move to previous plot(s)
-  observeEvent(input$prev.plot, {
-    if (values$num.plots > 0) {
+  observeEvent(input$linRegress.prev.plot, {
+    if (values$linRegress.num.plots > 0) {
       if (values$num.fits == 2) {
-        values$active.index <- values$num.plots + (values$active.index - 1) %% (-values$num.plots)
-        values$active.plot  <- values$plots[[values$active.index]]
+        values$linRegress.active.index <- values$linRegress.num.plots + (values$linRegress.active.index - 1) %% (-values$linRegress.num.plots)
+        values$linRegress.active.plot  <- values$linRegress.plots[[values$linRegress.active.index]]
         
         output$linRegress.plot.ui <- renderUI({
-          if (values$active.index == 1) {
+          if (values$linRegress.active.index == 1) {
             fluidPage(
               wellPanel(
-                plotOutput("plot.output")
+                plotOutput("linRegress.plot.output")
               ),
               
               fluidRow(
                 column(1,
                        offset = 10,
-                       actionButton("next.plot",
+                       actionButton("linRegress.next.plot",
                                     "",
                                     icon = icon("angle-right", "fa-2x"))
                 )
@@ -1215,20 +1215,20 @@ shinyServer(function(input, output) {
           } else {
             fluidPage(
               wellPanel(
-                plotOutput("plot.output")
+                plotOutput("linRegress.plot.output")
               ),
               
               fluidRow(
                 column(1,
                        offset = 1,
-                       actionButton("prev.plot",
+                       actionButton("linRegress.prev.plot",
                                     "",
                                     icon = icon("angle-left", "fa-2x"))
                 ),
                 
                 column(1,
                        offset = 8,
-                       actionButton("next.plot",
+                       actionButton("linRegress.next.plot",
                                     "",
                                     icon = icon("angle-right", "fa-2x"))
                 )
@@ -1237,25 +1237,25 @@ shinyServer(function(input, output) {
           }
         })
         
-        output$plot.output <- renderPlot({
-          grid.draw(values$active.plot)
+        output$linRegress.plot.output <- renderPlot({
+          grid.draw(values$linRegress.active.plot)
         })
       } else {
-        values$active.index <- values$num.plots + (values$active.index - 1) %% (-values$num.plots)
+        values$linRegress.active.index <- values$linRegress.num.plots + (values$linRegress.active.index - 1) %% (-values$linRegress.num.plots)
       
-        values$active.plot <- values$plots[[values$active.index]]
+        values$linRegress.active.plot <- values$linRegress.plots[[values$linRegress.active.index]]
         
         output$linRegress.plot.ui <- renderUI({
-          if (values$active.index == 1) {
+          if (values$linRegress.active.index == 1) {
             fluidPage(
               wellPanel(
-                plotOutput("plot.output")
+                plotOutput("linRegress.plot.output")
               ),
             
               fluidRow(
                 column(1,
                        offset = 10,
-                       actionButton("next.plot",
+                       actionButton("linRegress.next.plot",
                                     "",
                                     icon = icon("angle-right", "fa-2x"))
                 )
@@ -1264,20 +1264,20 @@ shinyServer(function(input, output) {
           } else {
             fluidPage(
               wellPanel(
-                plotOutput("plot.output")
+                plotOutput("linRegress.plot.output")
               ),
             
               fluidRow(
                 column(1,
                        offset = 1,
-                       actionButton("prev.plot",
+                       actionButton("linRegress.prev.plot",
                                     "",
                                     icon = icon("angle-left", "fa-2x"))
                 ),
                 
                 column(1,
                        offset = 8,
-                       actionButton("next.plot",
+                       actionButton("linRegress.next.plot",
                                     "",
                                     icon = icon("angle-right", "fa-2x"))
                 )
@@ -1286,8 +1286,8 @@ shinyServer(function(input, output) {
           }
         })
       
-        output$plot.output <- renderPlot({
-          values$active.plot
+        output$linRegress.plot.output <- renderPlot({
+          values$linRegress.active.plot
         })
       }
     }
@@ -1296,15 +1296,15 @@ shinyServer(function(input, output) {
   # Reset all windows once new data set is loaded
   observeEvent(input$display.table, {
     if (values$regress.active) {
-      output$results.LinRegress <- renderPrint({ invisible() })
+      output$linRegress.results <- renderPrint({ invisible() })
       
       values$regress.active <- F
     }
     
-    if (values$plots.active) {
+    if (values$linRegress.plots.active) {
       output$linRegress.plot.ui <- renderUI({ invisible() })
       
-      values$plots.active <- F
+      values$linRegress.plots.active <- F
     }
     
     updateTabsetPanel(session  = getDefaultReactiveDomain(), "linear.tabs",
@@ -1312,11 +1312,11 @@ shinyServer(function(input, output) {
   })
   
   # Reset plotting window for linear regression
-  observeEvent(input$display.LinRegress, {
-    if (values$plots.active) {
+  observeEvent(input$linRegress.display, {
+    if (values$linRegress.plots.active) {
       output$linRegress.plot.ui <- renderUI({ invisible() })
       
-      values$plots.active <- F
+      values$linRegress.plots.active <- F
     }
   })
 })

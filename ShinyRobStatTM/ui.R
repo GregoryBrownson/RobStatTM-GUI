@@ -62,16 +62,6 @@ JS.onCall <-
   })
 "
 
-Previous_Button <- HTML(
-  '
-    <div class="col-sm-4"><i class="fa fa-angle-right fa-2x"></i></div>
-  ')
-              
-Next_Button <- HTML(
-  '
-    <div class="col-sm-4"><i class="fa fa-angle-right fa-2x"></i></div>
-  ')
-
 pkgs <- c("RobStatTM", "robustbase", "PerformanceAnalytics")
 
 # Define UI for Shiny Application
@@ -227,16 +217,16 @@ shinyUI(navbarPage("RobStatTM",
               ),
               
               # Interface to robust options
-              uiOutput("robust.control"),
+              uiOutput("linRegress.robust.control"),
         
               # Button to run selected regression
-              actionButton("display.LinRegress", "Results")
+              actionButton("linRegress.display", "Results")
             ),
             
             mainPanel(
               tags$head(tags$style(HTML(CSS.format1))),
               
-              verbatimTextOutput("results.LinRegress")
+              verbatimTextOutput("linRegress.results")
             )
           )
         ),
@@ -251,9 +241,9 @@ shinyUI(navbarPage("RobStatTM",
               checkboxInput("residual.fit", "Residuals v. Fit", TRUE),
               checkboxInput("response.fit", "Response v. Fit", TRUE),
               checkboxInput("qq", "Residuals Normal QQ Plot", TRUE),
-              checkboxInput("stdResidual.RobustDist", "Std. Residuals v. Robust Distances", TRUE),
+              checkboxInput("linRegress.resid.dist", "Std. Residuals v. Robust Distances", TRUE),
               checkboxInput("residual.density", "Estimated Residual Density", TRUE),
-              checkboxInput("stdResidual.Index", "Std. Residuals v. Index (Time)", TRUE),
+              checkboxInput("linRegress.resid.index", "Std. Residuals v. Index (Time)", TRUE),
               uiOutput("overlaid.scatter.option"),
               
               tags$hr(),
@@ -318,11 +308,11 @@ shinyUI(navbarPage("RobStatTM",
                 fluidRow(
                   h4("Tolerance Control"),
                   
-                  numericInput("linRegress.convergence", "Convergence", value = 1e-7, min = 1e-16, step = 1),
+                  numericInput("linRegress.convergence", "Convergence", value = 1e-7, min = 1e-16, step = 1e-8 ),
                   
-                  numericInput("linRegress.scale.threshold", "Scale Threshold", value = 1e-7, min = 1e-16, step = 1),
+                  numericInput("linRegress.scale.threshold", "Scale Threshold", value = 1e-7, min = 1e-16, step = 1e-8),
                   
-                  numericInput("linRegress.rank.threshold", "Rank Threshold", value = 1.5e-6, min = 1e-16, step = 1)
+                  numericInput("linRegress.rank.threshold", "Rank Threshold", value = 1.5e-6, min = 1e-16, step = 1e-8)
                 )
               )
             )
@@ -331,8 +321,80 @@ shinyUI(navbarPage("RobStatTM",
       )
     ),
     
-    tabPanel("Robust Covariance"),
+    tabPanel("Robust Covariance",
+      tabsetPanel(id = "covariance.tabs", type = "tabs",
+        tabPanel(title = "Estimates", value = "covariance.est",
+          sidebarLayout(
+            sidebarPanel(
+              tags$head(tags$style(HTML(CSS.format1))),
+              radioButtons("covariance.method", "Method",
+                          choices = c("Both", "Classical", "Robust")),
+              
+              radioButtons("covariance.type", "Type",
+                          choices = c("Covariances", "Correlations"))
+            ),
+            
+            mainPanel(
+              
+            )
+          )
+        ),
+        
+         tabPanel("Plots",
+          sidebarLayout(
+            sidebarPanel(
+              tags$head(tags$style(HTML(CSS.format1))),
+              h4("Plots"),
+              checkboxInput("covariance.eigen", "Eigenvalues", TRUE),
+              checkboxInput("covariance.mahalanobis", "Mahalanobis Distances", TRUE),
+              checkboxInput("covariance.dist.dist", "Distance-Distance Plot", TRUE),
+              checkboxInput("covariance.ellipses.matrix", "Ellipses Matrix", TRUE),
+              checkboxInput("covariance.image.display", "Image Display", TRUE)
+            ),
+            
+            mainPanel(
+              
+            )
+          )
+        )
+      )
+    ),
     
-    tabPanel("PCA")
+    tabPanel("PCA",
+      tabsetPanel(id = "pca.tabs", type = "tabs",
+        tabPanel(title = "Estimates", value = "covariance.est",
+          sidebarLayout(
+            sidebarPanel(
+              tags$head(tags$style(HTML(CSS.format1))),
+              radioButtons("covariance.method", "Method",
+                          choices = c("Both", "Classical", "Robust")),
+              
+              radioButtons("covariance.type", "Type",
+                          choices = c("Covariances", "Correlations"))
+            ),
+            
+            mainPanel(
+              
+            )
+          )
+        ),
+        
+         tabPanel("Plots",
+          sidebarLayout(
+            sidebarPanel(
+              tags$head(tags$style(HTML(CSS.format1))),
+              h4("Plots"),
+              checkboxInput("pca.scatter", "Scatter Plots", TRUE),
+              checkboxInput("pca.loadings", "Loadings", TRUE),
+              checkboxInput("pca.scree", "Screeplot", TRUE)
+            ),
+            
+            mainPanel(
+              
+            )
+          )
+        )
+      )
+    )
   )
 ))

@@ -283,19 +283,21 @@ shinyUI(navbarPage("RobStatTM",
           fluidPage(
             fluidRow(
               column(6,
-                fluidRow(
+                tags$head(tags$style(HTML(CSS.format1))),
+                     
+                wellPanel(
                   h4("Final Estimator"),
                   
-                  selectInput("linRegress.family", "Loss Function",
+                  selectInput("linRegress.family.temp", "Loss Function",
                               choices  = c("Bi-square" = "bisquare",
                                            "Opt."   = "optimal",
                                            "Mod. Opt." = "modified.optimal"),
                               selected = "modified.optimal"),
           
-                  numericInput("linRegress.eff", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01)
+                  numericInput("linRegress.eff.temp", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01)
                 ),
                 
-                fluidRow(
+                wellPanel(
                   h4("Maximum Iterations"),
                   
                   numericInput("linRegress.final.M.estimate", "Final M-estimate", value = 50, min = 1, step = 1),
@@ -303,16 +305,24 @@ shinyUI(navbarPage("RobStatTM",
                   numericInput("linRegress.resid.scale", "Resid. Scale", value = 200, min = 1, step = 1),
                   
                   numericInput("linRegress.S.refine", "S-Refinement", value = 50, min = 1, step = 1)
-                ),
-                
-                fluidRow(
+                )
+              ),
+              
+              column(6,
+                wellPanel(
                   h4("Tolerance Control"),
                   
-                  numericInput("linRegress.convergence", "Convergence", value = 1e-7, min = 1e-16, step = 1e-8 ),
+                  numericInput("linRegress.convergence", "Convergence", value = 0.0000001,
+                                                                        min   = 0.0000000000000001,
+                                                                        step  = 0.00000001),
                   
-                  numericInput("linRegress.scale.threshold", "Scale Threshold", value = 1e-7, min = 1e-16, step = 1e-8),
+                  numericInput("linRegress.scale.threshold", "Scale Threshold", value = 0.0000001,
+                                                                                min   = 0.0000000000000001,
+                                                                                step  = 0.00000001),
                   
-                  numericInput("linRegress.rank.threshold", "Rank Threshold", value = 1.5e-6, min = 1e-16, step = 1e-8)
+                  numericInput("linRegress.rank.threshold", "Rank Threshold", value = 0.00000015,
+                                                                              min   = 0.000000000001,
+                                                                              step  = 0.00000001)
                 )
               )
             )

@@ -118,7 +118,7 @@ shinyServer(function(input, output) {
     
     # Get variable names
     values$dat.variables <- colnames(values$dat)
-      
+    
     return (as.data.frame(values$dat))
   })
   
@@ -291,11 +291,13 @@ shinyServer(function(input, output) {
     }
   })
   
-  run_regression <- eventReactive(input$linRegress.display, {
+  observeEvent(input$linRegress.display, {
     if (is.null(input$independent.var.LinRegress)) {
-      return(NULL)
-    } else if (!is.numeric(input$independent.var.LinRegress)) {
-      invalid_response()
+      output$linRegress.results <- renderPrint({
+        cat("ERROR: Missing dependent or independent variables")
+      })
+    } else if (!is.numeric(values$dat[, input$dependent.var.LinRegress])) {
+      output$linRegress.results <- renderPrint({ invalid_response() })
     }
     
     index <- match(input$fit.option, values$regress.methods)
@@ -309,13 +311,13 @@ shinyServer(function(input, output) {
                     values$regress.models)
     
     fit <- vector(mode = "list", length = length(index))
-    
-    control <- lmrobdet.control(efficiency = as.numeric(input$linRegress.eff),
-                                family = input$linRegress.family,
-                                compute.rd = T)
     if (model[1] == "lm") {
       fit[[1]] <- do.call(model[1], list(as.formula(input$formula.text), data = values$dat))
     } else {
+      control <- lmrobdet.control(efficiency = input$linRegress.eff,
+                                  family = input$linRegress.family,
+                                  compute.rd = T)
+    
       fit[[1]] <- do.call(model[1], list(as.formula(input$formula.text),
                                          data    = values$dat,
                                          control = control))
@@ -329,9 +331,42 @@ shinyServer(function(input, output) {
                                            data    = values$dat,
                                            control = control))
       }
+    } else if (input$linRegress.duplicate) {
+      
+      control <- lmrobdet.control(efficiency = as.numeric(input$linRegress.eff2),
+                                family = input$linRegress.family2,
+                                compute.rd = T)
+      
+      fit[[2]] <- do.call(model[1], list(as.formula(input$formula.text),
+                                           data    = values$dat,
+                                           control = control))
     }
+
+    values$regress.active <- T
     
-    return(fit)
+    if (input$linRegress.duplicate) {
+      values$linRegress.models <- c(paste(input$fit.option[1], "1"), paste(input$fit.option[1], "2"))
+    } else {
+      values$linRegress.models <- input$fit.option
+    }
+      
+    output$linRegress.results <- renderPrint({
+      values$fit1 <- fit[[1]]
+      
+      cat(paste(values$linRegress.models[1], '\n'))
+      
+      print(summary(values$fit1))
+      
+      values$num.fits <- length(fit)
+        
+      if (values$num.fits == 2) {
+        values$fit2 <- fit[[2]]
+        
+        cat(paste(values$linRegress.models[2], '\n'))
+        
+        print(summary(values$fit2))
+      }
+    })
   })
   
   invalid_response <- eventReactive(input$linRegress.display, {
@@ -340,34 +375,12 @@ shinyServer(function(input, output) {
                  "type. Please select a response variable with numeric values"))
   })
   
-  output$linRegress.results <- renderPrint({
-    values$regress.active <- T
-    
-    if (is.numeric(values$dat[, input$dependent.var.LinRegress])) {
-      fit <- run_regression()
-      
-      if (is.null(fit)) {
-        cat("ERROR: Missing dependent or independent variables")
-      } else {
-    
-        values$fit1 <- fit[[1]]
-        
-        print(summary(values$fit1))
-        
-        values$num.fits <- length(fit)
-          
-        if (values$num.fits == 2) {
-          values$fit2 <- fit[[2]]
-          print(summary(values$fit2))
-        }
-      }
-    }
-  })
+  
   
   ## Plotting ##
   
   output$overlaid.scatter.option <- renderUI({
-    if (length(input$fit.option) == 2 && length(input$independent.var.LinRegress) == 1) {
+    if (values$num.fits == 2 && length(input$independent.var.LinRegress) == 1) {
       checkboxInput("overlaid.scatter", "Scatter with Overlaid Fits", TRUE)
     } else {
       return("")
@@ -412,7 +425,7 @@ shinyServer(function(input, output) {
         sigma <- fit$scale
       }
       
-      title.name <- ifelse(any(class(fit) == "lm"), input$fit.option[1], paste("Robust ", input$fit.option[1]))
+      title.name <- ifelse(any(class(fit) == "lm"), values$linRegress.models[1], paste("Robust", values$linRegress.models[1]))
       
       plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
                       ggtitle(title.name) +
@@ -437,7 +450,7 @@ shinyServer(function(input, output) {
 
       dat <- data.frame(X = fit.vals, Y = response)
       
-      title.name <- ifelse(any(class(fit) == "lm"), input$fit.option[1], paste("Robust ", input$fit.option[1]))
+      title.name <- ifelse(any(class(fit) == "lm"), values$linRegress.models[1], paste("Robust", values$linRegress.models[1]))
 
       plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
                       ggtitle(title.name) +
@@ -456,7 +469,7 @@ shinyServer(function(input, output) {
 
       dat <- data.frame(Res = sort(fit$residuals))
       
-      title.name <- ifelse(any(class(fit) == "lm"), input$fit.option[1], paste("Robust ", input$fit.option[1]))
+      title.name <- ifelse(any(class(fit) == "lm"), values$linRegress.models[1], paste("Robust", values$linRegress.models[1]))
 
       # Calculate slope and intercept for qqline
       
@@ -505,7 +518,7 @@ shinyServer(function(input, output) {
     if (input$linRegress.resid.dist == T) {
       i <- i + 1
       
-      title.name <- ifelse(any(class(fit) == "lm"), input$fit.option[1], paste("Robust ", input$fit.option[1]))
+      title.name <- ifelse(any(class(fit) == "lm"), values$linRegress.models[1], paste("Robust", values$linRegress.models[1]))
       
       if (any(class(fit) == "lm")) {
         st.residuals <- rstandard(fit)
@@ -562,7 +575,7 @@ shinyServer(function(input, output) {
       
       dat <- data.frame(Res = fit$residuals)
       
-      title.name <- ifelse(any(class(fit) == "lm"), input$fit.option[1], paste("Robust ", input$fit.option[1]))
+      title.name <- ifelse(any(class(fit) == "lm"), values$linRegress.models[1], paste("Robust", values$linRegress.models[1]))
       
       plots[[i]] <- ggplot(data = dat) +
                       ggtitle(title.name) +
@@ -586,7 +599,7 @@ shinyServer(function(input, output) {
     if (input$linRegress.resid.index == T) {
       i <- i + 1
       
-      title.name <- ifelse(any(class(fit) == "lm"), input$fit.option[1], paste("Robust ", input$fit.option[1]))
+      title.name <- ifelse(any(class(fit) == "lm"), values$linRegress.models[1], paste("Robust", values$linRegress.models[1]))
       
       if (any(class(values$dat) == "zoo")) {
         indx <- index(values$dat)
@@ -632,7 +645,7 @@ shinyServer(function(input, output) {
         
         dat <- data.frame(X = fit.vals, Y = fit2$residuals)
         
-        title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
+        title.name <- ifelse(any(class(fit2) == "lm"), values$linRegress.models[2], paste("Robust", values$linRegress.models[2]))
         
         sigma <- 1
         
@@ -683,7 +696,7 @@ shinyServer(function(input, output) {
   
         dat <- data.frame(X = fit.vals, Y = fit2$model[, 1])
         
-        title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
+        title.name <- ifelse(any(class(fit2) == "lm"), values$linRegress.models[2], paste("Robust", values$linRegress.models[2]))
   
         plt <- ggplot(data = dat, aes(x = X, y = Y)) +
                  ggtitle(title.name) +
@@ -723,7 +736,7 @@ shinyServer(function(input, output) {
   
         dat <- data.frame(Res = sort(fit2$residuals))
         
-        title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
+        title.name <- ifelse(any(class(fit2) == "lm"), values$linRegress.models[2], paste("Robust", values$linRegress.models[2]))
   
         # Calculate slope and intercept for qqline 
         y     <- quantile(fit2$residuals, c(0.25, 0.75), type=5)
@@ -787,7 +800,7 @@ shinyServer(function(input, output) {
       if (input$linRegress.resid.dist == T) {
         j <- j + 1
         
-        title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
+        title.name <- ifelse(any(class(fit2) == "lm"), values$linRegress.models[2], paste("Robust", values$linRegress.models[2]))
         
         if (any(class(fit2) == "lm")) {
           st.residuals <- rstandard(fit2)
@@ -865,7 +878,7 @@ shinyServer(function(input, output) {
         
         dat <- data.frame(Res = fit2$residuals)
         
-        title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
+        title.name <- ifelse(any(class(fit2) == "lm"), values$linRegress.models[2], paste("Robust", values$linRegress.models[2]))
         
         plt <- ggplot(data = dat) +
                  ggtitle(title.name) +
@@ -908,7 +921,7 @@ shinyServer(function(input, output) {
       if (input$linRegress.resid.index == T) {
         j <- j + 1
         
-        title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
+        title.name <- ifelse(any(class(fit2) == "lm"), values$linRegress.models[2], paste("Robust", values$linRegress.models[2]))
         
         indx <- NULL
         
@@ -986,7 +999,7 @@ shinyServer(function(input, output) {
                  geom_abline(slope = slope1, intercept = int1, color = "black") +
                  geom_abline(slope = slope2, intercept = int2, color = "blue") +
                  scale_color_manual("",
-                                    breaks = input$fit.option,
+                                    breaks = values$linRegress.models,
                                     values = c("black", "blue"))
         
         plots[[j]] <- ggplotGrob(plt)

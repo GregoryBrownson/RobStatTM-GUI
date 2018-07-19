@@ -43,34 +43,23 @@ CSS.format1 <-
 # JavaScript function to display slider input values in scientific notation
 JS.log10 <-
 "
-// Function to compute logarithmic scale with base 10 for slider input
-function log10 (sliderId) {
-  $('#'+sliderId).data('ionRangeSlider').update({
-      'prettify': function (num) { return ('1e'+num); }
-    })
+  // Function to compute logarithmic scale with base 10 for slider input
+  function log10 (sliderId) {
+    $('#'+sliderId).data('ionRangeSlider').update({
+        'prettify': function (num) { return ('1e'+num); }
+      })
 }"
 
 # JavaScript code needed to call above function
 JS.onCall <-
 "
-$(document).ready(function() {
-  // Wait for other scripts to execute
-  setTimeout(function() {
-    // Include call for each slider input
-    log10('tolerance')
-  }, 5)
-})
-"
-
-JS.keyPress <-
-"
-$(function(){ 
-  $(document).keyup(function(e) {
-    if (e.which == 81) {
-      $('#button').click()
-    }
-  });
-})
+  $(document).ready(function() {
+    // Wait for other scripts to execute
+    setTimeout(function() {
+      // Include call for each slider input
+      log10('tolerance')
+    }, 5)
+  })
 "
 
 Previous_Button <- HTML(
@@ -215,9 +204,12 @@ shinyUI(navbarPage("RobStatTM",
               tags$head(tags$script(HTML(JS.onCall))),
               
               selectizeInput("fit.option", "Method",
-                             choices = c("LS", "M", "MM", "DCML"),
-                             selected = "MM",
-                             options = list(maxItems = 2, placeholder = 'Select up to 2 methods')),
+                             choices   = c("LS", "M", "MM", "DCML"),
+                             selected  = "MM",
+                             options   = list(maxItems = 2,
+                                              placeholder = 'Select up to 2 methods',
+                                              hideSelected = F,
+                                              duplicates = T)),
               
               # List of dependent variables, must be selected
               uiOutput("select.dependent.LinRegress"),
@@ -227,6 +219,12 @@ shinyUI(navbarPage("RobStatTM",
               
               # String representing regression formula of form Y ~ X_0 + ... + X_n
               uiOutput("formula.LinRegress"),
+              
+              conditionalPanel(
+                condition = "input['fit.option'].length == 1",
+                
+                checkboxInput("linRegress.duplicate", "Add Second Regression", value = FALSE)
+              ),
               
               # Interface to robust options
               uiOutput("robust.control"),
@@ -251,11 +249,12 @@ shinyUI(navbarPage("RobStatTM",
               tags$head(tags$style(HTML("hr {border-top: 1px solid #000000;}"))),
               h4("Plots"),
               checkboxInput("residual.fit", "Residuals v. Fit", TRUE),
-              checkboxInput("response.fit", "Response v. Fit", FALSE),
+              checkboxInput("response.fit", "Response v. Fit", TRUE),
               checkboxInput("qq", "Residuals Normal QQ Plot", TRUE),
               checkboxInput("stdResidual.RobustDist", "Std. Residuals v. Robust Distances", TRUE),
               checkboxInput("residual.density", "Estimated Residual Density", TRUE),
               checkboxInput("stdResidual.Index", "Std. Residuals v. Index (Time)", TRUE),
+              uiOutput("overlaid.scatter.option"),
               
               tags$hr(),
               
@@ -264,7 +263,6 @@ shinyUI(navbarPage("RobStatTM",
               checkboxInput("include.rugplot", "Include Rugplot", FALSE),
               checkboxInput("qq.env", "QQ Plot Envelope", TRUE),
               checkboxInput("qqline.robust", "Include Robust QQ Line", TRUE),
-              checkboxInput("qq.halfnorm", "Half Normal QQ Plot", FALSE),
               uiOutput("extreme.points"),
               
               # Button to run selected regression
@@ -274,7 +272,7 @@ shinyUI(navbarPage("RobStatTM",
             mainPanel(
               tags$head(tags$style(HTML(CSS.format1))),
               
-              uiOutput("plot.ui")
+              uiOutput("linRegress.plot.ui")
             )
           )
         ),
@@ -287,6 +285,46 @@ shinyUI(navbarPage("RobStatTM",
             
             mainPanel(
               
+            )
+          )
+        ),
+        
+        tabPanel("Advanced",
+          fluidPage(
+            fluidRow(
+              column(6,
+                fluidRow(
+                  h4("Final Estimator"),
+                  
+                  selectInput("linRegress.family", "Loss Function",
+                              choices  = c("Bi-square" = "bisquare",
+                                           "Opt."   = "optimal",
+                                           "Mod. Opt." = "modified.optimal"),
+                              selected = "modified.optimal"),
+          
+                  numericInput("linRegress.eff", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01)
+                ),
+                
+                fluidRow(
+                  h4("Maximum Iterations"),
+                  
+                  numericInput("linRegress.final.M.estimate", "Final M-estimate", value = 50, min = 1, step = 1),
+          
+                  numericInput("linRegress.resid.scale", "Resid. Scale", value = 200, min = 1, step = 1),
+                  
+                  numericInput("linRegress.S.refine", "S-Refinement", value = 50, min = 1, step = 1)
+                ),
+                
+                fluidRow(
+                  h4("Tolerance Control"),
+                  
+                  numericInput("linRegress.convergence", "Convergence", value = 1e-7, min = 1e-16, step = 1),
+                  
+                  numericInput("linRegress.scale.threshold", "Scale Threshold", value = 1e-7, min = 1e-16, step = 1),
+                  
+                  numericInput("linRegress.rank.threshold", "Rank Threshold", value = 1.5e-6, min = 1e-16, step = 1)
+                )
+              )
             )
           )
         )

@@ -15,9 +15,6 @@ library(PerformanceAnalytics)
 library(RobStatTM)
 library(robustbase)
 library(shiny)
-library(shinyjs)
-library(vcd)
-library(vcdExtra)
 
 thm <- theme_bw() +
        theme(plot.title = element_text(hjust = 0.5))
@@ -72,9 +69,6 @@ shinyServer(function(input, output) {
     # List of datasets
     lst <- data(package = input$library)
     
-    # Get info on datasets
-    values$data.info <- vcdExtra::datasets(input$library)
-    
     # Create selection for datasets
     selectInput("dataset",
                 label   = "Select Dataset",
@@ -119,13 +113,13 @@ shinyServer(function(input, output) {
       # Obtain specified dataset from specified package
       data(list = input$dataset, package = input$library)
       
-      values$dat <- as.data.frame(get(input$dataset))
+      values$dat <- get(input$dataset)
     }
     
     # Get variable names
     values$dat.variables <- colnames(values$dat)
       
-    return (values$dat)
+    return (as.data.frame(values$dat))
   })
   
   # Create data table
@@ -215,8 +209,8 @@ shinyServer(function(input, output) {
     
     # Render select input for variables
     selectInput("independent.var.LinRegress", "Independent",
-                choices = ind.vars,
-                selected = ind.vars,
+                choices  = ind.vars,
+                selected = ind.vars[1],
                 multiple = TRUE)
   })
   
@@ -244,26 +238,66 @@ shinyServer(function(input, output) {
   })
   
   output$robust.control <- renderUI({
-    if (any(input$fit.option != "Least Squares")) {
-      tabPanel("",
+    if (any(input$fit.option != "LS")) {
+      fl.mult.selected <- F
+      
+      if (length(input$fit.option) == 1) {
+        fl.mult.selected <- input$linRegress.duplicate
+      } else {
+        fl.mult.selected <- all(input$fit.option != "LS")
+      }
+      
+      if (fl.mult.selected) {
+        tabPanel("",
+          tags$hr(),
+          
+          h4("Robust Controls 1"),
+          
+          selectInput("linRegress.family", "Family",
+                      choices = c("Bi-square" = "bisquare",
+                                  "Opt."      = "optimal",
+                                  "Mod. Opt." = "modified.optimal"),
+                      selected = "modified.optimal"),
+          
+          numericInput("linRegress.eff", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01),
+          
+          tags$hr(),
+          
+          h4("Robust Controls 2"),
+          
+          selectInput("linRegress.family2", "Family",
+                      choices = c("Bi-square" = "bisquare",
+                                  "Opt."      = "optimal",
+                                  "Mod. Opt." = "modified.optimal"),
+                      selected = "modified.optimal"),
+          
+          numericInput("linRegress.eff2", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01)
+        )
+      } else {
+        tabPanel("",
           tags$hr(),
           
           h4("Robust Controls"),
           
-          selectInput("family.regress", "Family",
+          selectInput("linRegress.family", "Family",
                       choices = c("Bi-square" = "bisquare",
-                                  "Opt."   = "optimal",
+                                  "Opt."      = "optimal",
                                   "Mod. Opt." = "modified.optimal"),
                       selected = "modified.optimal"),
           
-          numericInput("eff.regress", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01),
-        
-          tags$hr()
-      )
+          numericInput("linRegress.eff", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01)
+        )
+      }
     }
   })
   
   run_regression <- eventReactive(input$display.LinRegress, {
+    if (is.null(input$independent.var.LinRegress)) {
+      return(NULL)
+    } else if (!is.numeric(input$independent.var.LinRegress)) {
+      invalid_response()
+    }
+    
     index <- match(input$fit.option, values$regress.methods)
     
     n <- length(index)
@@ -276,8 +310,8 @@ shinyServer(function(input, output) {
     
     fit <- vector(mode = "list", length = length(index))
     
-    control <- lmrobdet.control(efficiency = as.numeric(input$eff.regress),
-                                family = input$family.regress,
+    control <- lmrobdet.control(efficiency = as.numeric(input$linRegress.eff),
+                                family = input$linRegress.family,
                                 compute.rd = T)
     if (model[1] == "lm") {
       fit[[1]] <- do.call(model[1], list(as.formula(input$formula.text), data = values$dat))
@@ -286,8 +320,6 @@ shinyServer(function(input, output) {
                                          data    = values$dat,
                                          control = control))
     }
-    
-    
     
     if (length(index) == 2) {
       if (model[2] == "lm") {
@@ -313,23 +345,34 @@ shinyServer(function(input, output) {
     
     if (is.numeric(values$dat[, input$dependent.var.LinRegress])) {
       fit <- run_regression()
+      
+      if (is.null(fit)) {
+        cat("ERROR: Missing dependent or independent variables")
+      } else {
     
-      values$fit1 <- fit[[1]]
-      
-      print(summary(values$fit1))
-      
-      values$num.fits <- length(fit)
+        values$fit1 <- fit[[1]]
         
-      if (values$num.fits == 2) {
-        values$fit2 <- fit[[2]]
-        print(summary(values$fit2))
+        print(summary(values$fit1))
+        
+        values$num.fits <- length(fit)
+          
+        if (values$num.fits == 2) {
+          values$fit2 <- fit[[2]]
+          print(summary(values$fit2))
+        }
       }
-    } else {
-      invalid_response()
     }
   })
   
   ## Plotting ##
+  
+  output$overlaid.scatter.option <- renderUI({
+    if (length(input$fit.option) == 2 && length(input$independent.var.LinRegress) == 1) {
+      checkboxInput("overlaid.scatter", "Scatter with Overlaid Fits", TRUE)
+    } else {
+      return("")
+    }
+  })
   
   output$extreme.points <- renderUI({
     if (is.null(dim(values$dat))) {
@@ -417,7 +460,7 @@ shinyServer(function(input, output) {
 
       # Calculate slope and intercept for qqline
       
-      y     <- quantile(fit$residuals, c(0.25, 0.75), type=5)
+      y     <- quantile(fit$residuals, c(0.25, 0.75), type = 5)
       x     <- qnorm(c(0.25, 0.75))
       slope <- diff(y) / diff(x)
       int   <- y[1] - slope * x[1]
@@ -467,11 +510,17 @@ shinyServer(function(input, output) {
       if (any(class(fit) == "lm")) {
         st.residuals <- rstandard(fit)
         
-        mat <- model.frame(fit, fit$model)
+        tr <- terms(fit)
         
-        MD <- mahalanobis(x      = mat,
-                          center = colMeans(mat),
-                          cov    = var(mat))
+        mat <- model.matrix(fit)
+        
+        if(attr(tr, "intercept") == 1) {
+          mat <- mat[, -1, drop = F]
+        }
+        
+        MD <- sqrt(mahalanobis(x      = mat,
+                               center = colMeans(mat),
+                               cov    = var(mat)))
         
         chi <- sqrt(qchisq(p = 1 - 0.025, df = fit$rank))
               
@@ -539,32 +588,38 @@ shinyServer(function(input, output) {
       
       title.name <- ifelse(any(class(fit) == "lm"), input$fit.option[1], paste("Robust ", input$fit.option[1]))
       
+      if (any(class(values$dat) == "zoo")) {
+        indx <- index(values$dat)
+      } else {
+        indx <- 1:nrow(values$dat)
+      }
+      
       if (any(class(fit) == "lm")) {
         st.residuals <- rstandard(fit)
         
-        dat <- data.frame(X = 1:length(st.residuals), Y = st.residuals)
+        dat <- data.frame(X = indx, Y = st.residuals)
       
         plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
                         ggtitle(title.name) +
                         ylab("Standardized Residuals") +
-                        geom_point()
+                        geom_point() +
+                        geom_line()
       } else {
         st.residuals <- fit$residuals / fit$scale
         
-        dat <- data.frame(X = 1:length(st.residuals), Y = st.residuals)
+        dat <- data.frame(X = indx, Y = st.residuals)
       
         plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
                         ggtitle(title.name) +
                         ylab("Robustly Standardized Residuals") +
-                        geom_point()
+                        geom_point() +
+                        geom_line()
       }
     }
     
     ## 2 Regression Case
     
     if (values$num.fits == 2) {
-      plots2 <- vector(mode = "list")
-    
       j <- 0
       
       fit2 <- values$fit2
@@ -587,20 +642,20 @@ shinyServer(function(input, output) {
           sigma <- fit2$scale
         }
         
-        plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                         ggtitle(title.name) +
-                         xlab("Fitted Values") +
-                         ylab("Residuals") +
-                         geom_point() +
-                         geom_hline(yintercept = c(-2.5 * sigma, 0, 2.5 * sigma),
-                                    linetype = 2)
+        plt <- ggplot(data = dat, aes(x = X, y = Y)) +
+                 ggtitle(title.name) +
+                 xlab("Fitted Values") +
+                 ylab("Residuals") +
+                 geom_point() +
+                 geom_hline(yintercept = c(-2.5 * sigma, 0, 2.5 * sigma),
+                            linetype = 2)
         
         if (input$include.rugplot == T) {
-          plots2[[j]] <- plots2[[j]] + geom_rug()
+          plt <- plt + geom_rug()
         }
         
         p1.build <- ggplot_build(plots[[j]])
-        p2.build <- ggplot_build(plots2[[j]])
+        p2.build <- ggplot_build(plt)
         
         x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
         x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
@@ -608,14 +663,16 @@ shinyServer(function(input, output) {
         y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         
-        plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
+        plots[[j]] <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0)) +
                         scale_x_continuous(limits = c(x.min, x.max),
-                                                      expand = c(0, 0))
-        plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                        expand = c(0, 0)) +
-                        scale_x_continuous(limits = c(x.min, x.max),
-                                                      expand = c(0, 0))
+                                           expand = c(0, 0))
+        plt <- plt + scale_y_continuous(limits = c(y.min, y.max),
+                                        expand = c(0, 0)) +
+                 scale_x_continuous(limits = c(x.min, x.max),
+                                    expand = c(0, 0))
+        
+        plots[[j]] <- cbind(ggplotGrob(plots[[j]]), ggplotGrob(plt), size = "last")
       }
       
       # Response v. fitted values
@@ -628,18 +685,18 @@ shinyServer(function(input, output) {
         
         title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
   
-        plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                         ggtitle(title.name) +
-                         xlab("Fitted Values") +
-                         ylab("Response") +
-                         geom_point()
+        plt <- ggplot(data = dat, aes(x = X, y = Y)) +
+                 ggtitle(title.name) +
+                 xlab("Fitted Values") +
+                 ylab("Response") +
+                 geom_point()
   
         if (input$include.rugplot == T) {
-          plots2[[j]] <- plots2[[j]] + geom_rug()
+          plt <- plt + geom_rug()
         }
         
         p1.build <- ggplot_build(plots[[j]])
-        p2.build <- ggplot_build(plots2[[j]])
+        p2.build <- ggplot_build(plt)
         
         x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
         x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
@@ -649,12 +706,15 @@ shinyServer(function(input, output) {
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0)) +
-                        scale_x_continuous(limits = c(x.min, x.max),
-                                                      expand = c(0, 0))
-        plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                        expand = c(0, 0)) +
-                        scale_x_continuous(limits = c(x.min, x.max),
-                                                      expand = c(0, 0))
+                         scale_x_continuous(limits = c(x.min, x.max),
+                                            expand = c(0, 0))
+        
+        plt <- plt + scale_y_continuous(limits = c(y.min, y.max),
+                                        expand = c(0, 0)) +
+                 scale_x_continuous(limits = c(x.min, x.max),
+                                    expand = c(0, 0))
+        
+        plots[[j]] <- cbind(ggplotGrob(plots[[j]]), ggplotGrob(plt), size = "last")
       }
   
       # QQ Plot
@@ -684,25 +744,25 @@ shinyServer(function(input, output) {
           dat$lower <- fit.vals - zz * SE
           dat$upper <- fit.vals + zz * SE
           
-          plots2[[j]] <- ggplot(data = dat, aes(x = z, y = Res)) +
-                           ggtitle(title.name) +
-                           xlab("Normal Quantiles") +
-                           ylab("Ordered Residuals") +
-                           geom_point() +
-                           geom_abline(slope = slope, intercept = int) +
-                           geom_ribbon(aes(ymin = lower, ymax = upper),
-                                       alpha = 0.2)
+          plt <- ggplot(data = dat, aes(x = z, y = Res)) +
+                   ggtitle(title.name) +
+                   xlab("Normal Quantiles") +
+                   ylab("Ordered Residuals") +
+                   geom_point() +
+                   geom_abline(slope = slope, intercept = int) +
+                   geom_ribbon(aes(ymin = lower, ymax = upper),
+                               alpha = 0.2)
         } else {
-          plots2[[j]] <- ggplot(data = dat, aes(sample = Res)) +
-                           ggtitle(title.name) +
-                           xlab("Normal Quantiles") +
-                           ylab("Ordered Residuals") +
-                           geom_qq() +
-                           geom_abline(slope = slope, intercept = int)
+          plt <- ggplot(data = dat, aes(sample = Res)) +
+                   ggtitle(title.name) +
+                   xlab("Normal Quantiles") +
+                   ylab("Ordered Residuals") +
+                   geom_qq() +
+                   geom_abline(slope = slope, intercept = int)
         }
         
         p1.build <- ggplot_build(plots[[j]])
-        p2.build <- ggplot_build(plots2[[j]])
+        p2.build <- ggplot_build(plt)
         
         x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
         x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
@@ -713,11 +773,14 @@ shinyServer(function(input, output) {
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0)) +
                         scale_x_continuous(limits = c(x.min, x.max),
-                                                      expand = c(0, 0))
-        plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                        expand = c(0, 0)) +
-                        scale_x_continuous(limits = c(x.min, x.max),
-                                                      expand = c(0, 0))
+                                           expand = c(0, 0))
+        
+        plt <- plt + scale_y_continuous(limits = c(y.min, y.max),
+                                        expand = c(0, 0)) +
+                 scale_x_continuous(limits = c(x.min, x.max),
+                                    expand = c(0, 0))
+        
+        plots[[j]] <- cbind(ggplotGrob(plots[[j]]), ggplotGrob(plt), size = "last")
       }
       
       # Standardized residuals vs. robust distances
@@ -729,7 +792,13 @@ shinyServer(function(input, output) {
         if (any(class(fit2) == "lm")) {
           st.residuals <- rstandard(fit2)
           
-          mat <- model.frame(fit2, fit2$model)
+          tr <- terms(fit2)
+        
+          mat <- model.matrix(fit2)
+          
+          if(attr(tr, "intercept") == 1) {
+            mat <- mat[, -1, drop = F]
+          }
           
           MD <- sqrt(mahalanobis(x      = mat,
                                  center = colMeans(mat),
@@ -739,15 +808,15 @@ shinyServer(function(input, output) {
                 
           dat <- data.frame(X = MD, Y = st.residuals)
   
-          plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                           ggtitle(title.name) +
-                           xlab("Distances") +
-                           ylab("Standardized Residuals") +
-                           geom_point() +
-                           geom_hline(yintercept = c(-2.5, 0, 2.5),
-                                      linetype = 2) + 
-                           geom_vline(xintercept = chi,
-                                      linetype = 2)
+          plt <- ggplot(data = dat, aes(x = X, y = Y)) +
+                   ggtitle(title.name) +
+                   xlab("Distances") +
+                   ylab("Standardized Residuals") +
+                   geom_point() +
+                   geom_hline(yintercept = c(-2.5, 0, 2.5),
+                              linetype = 2) + 
+                   geom_vline(xintercept = chi,
+                              linetype = 2)
         } else {
           st.residuals <- fit2$residuals / fit2$scale
           
@@ -757,19 +826,19 @@ shinyServer(function(input, output) {
                 
           dat <- data.frame(X = MD, Y = st.residuals)
   
-          plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) +
-                           ggtitle(title.name) +
-                           xlab("Robust Distances") +
-                           ylab("Robustly Standardized Residuals") +
-                           geom_point() +
-                           geom_hline(yintercept = c(-2.5, 0, 2.5),
-                                      linetype = 2) + 
-                           geom_vline(xintercept = chi,
-                                      linetype = 2)
+          plt <- ggplot(data = dat, aes(x = X, y = Y)) +
+                   ggtitle(title.name) +
+                   xlab("Robust Distances") +
+                   ylab("Robustly Standardized Residuals") +
+                   geom_point() +
+                   geom_hline(yintercept = c(-2.5, 0, 2.5),
+                              linetype = 2) + 
+                   geom_vline(xintercept = chi,
+                              linetype = 2)
         }
         
         p1.build <- ggplot_build(plots[[j]])
-        p2.build <- ggplot_build(plots2[[j]])
+        p2.build <- ggplot_build(plt)
         
         x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
         x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
@@ -777,14 +846,17 @@ shinyServer(function(input, output) {
         y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         
-        plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
+        plots[[j]] <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0)) +
                         scale_x_continuous(limits = c(x.min, x.max),
-                                                      expand = c(0, 0))
-        plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                        expand = c(0, 0)) +
-                        scale_x_continuous(limits = c(x.min, x.max),
-                                                      expand = c(0, 0))
+                                           expand = c(0, 0))
+        
+        plt <- plt + scale_y_continuous(limits = c(y.min, y.max),
+                                        expand = c(0, 0)) +
+                 scale_x_continuous(limits = c(x.min, x.max),
+                                    expand = c(0, 0))
+        
+        plots[[j]] <- cbind(ggplotGrob(plots[[j]]), ggplotGrob(plt), size = "last")
       }
       
       # Estimated residual density
@@ -795,25 +867,25 @@ shinyServer(function(input, output) {
         
         title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
         
-        plots2[[j]] <- ggplot(data = dat) +
-                         ggtitle(title.name) +
-                         xlab("Residuals") +
-                         ylab("Density") +
-                         geom_histogram(aes(x = Res, y = ..density..),
-                                        fill  = 'white',
-                                        color = 'black',
-                                        bins  = 35) +
-                         geom_density(aes(x = Res),
-                                      color = 'blue',
-                                      fill  = 'blue',
-                                      alpha = 0.1)
+        plt <- ggplot(data = dat) +
+                 ggtitle(title.name) +
+                 xlab("Residuals") +
+                 ylab("Density") +
+                 geom_histogram(aes(x = Res, y = ..density..),
+                                fill  = 'white',
+                                color = 'black',
+                                bins  = 35) +
+                 geom_density(aes(x = Res),
+                              color = 'blue',
+                              fill  = 'blue',
+                              alpha = 0.1)
         
         if (input$include.rugplot == T) {
-          plots2[[j]] <- plots2[[j]] + geom_rug()
+          plt <- plt + geom_rug()
         }
         
         p1.build <- ggplot_build(plots[[j]])
-        p2.build <- ggplot_build(plots2[[j]])
+        p2.build <- ggplot_build(plt)
         
         x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
         x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
@@ -824,9 +896,12 @@ shinyServer(function(input, output) {
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0)) +
                         scale_x_continuous(limits = c(x.min, x.max))
-        plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                        expand = c(0, 0)) +
-                        scale_x_continuous(limits = c(x.min, x.max))
+        
+        plt <- plt + scale_y_continuous(limits = c(y.min, y.max),
+                                        expand = c(0, 0)) +
+                 scale_x_continuous(limits = c(x.min, x.max))
+        
+        plots[[j]] <- cbind(ggplotGrob(plots[[j]]), ggplotGrob(plt), size = "last")
       }
       
       # Standardized residuals vs. index values
@@ -835,66 +910,102 @@ shinyServer(function(input, output) {
         
         title.name <- ifelse(any(class(fit2) == "lm"), input$fit.option[2], paste("Robust ", input$fit.option[2]))
         
+        indx <- NULL
+        
+        if (any(class(values$dat) == "zoo")) {
+          indx <- index(values$dat)
+        } else {
+          indx <- 1:nrow(values$dat)
+        }
+        
         if (any(class(fit2) == "lm")) {
           st.residuals <- rstandard(fit2)
           
-          dat <- data.frame(X = 1:length(st.residuals), Y = st.residuals)
+          dat <- data.frame(X = indx, Y = st.residuals)
         
-          plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) + 
-                           ggtitle(title.name) +
-                           ylab("Standardized Residuals") +
-                           geom_point()
+          plt <- ggplot(data = dat, aes(x = X, y = Y)) + 
+                   ggtitle(title.name) +
+                   ylab("Standardized Residuals") +
+                   geom_point() +
+                   geom_line()
         } else {
           st.residuals <- fit2$residuals / fit2$scale
           
-          dat <- data.frame(X = 1:length(st.residuals), Y = st.residuals)
+          dat <- data.frame(X = indx, Y = st.residuals)
         
-          plots2[[j]] <- ggplot(data = dat, aes(x = X, y = Y)) + 
-                           ggtitle(title.name) +
-                           ylab("Robustly Standardized Residuals") +
-                           geom_point()
+          plt <- ggplot(data = dat, aes(x = X, y = Y)) + 
+                   ggtitle(title.name) +
+                   ylab("Robustly Standardized Residuals") +
+                   geom_point() +
+                   geom_line()
         }
         
         p1.build <- ggplot_build(plots[[j]])
-        p2.build <- ggplot_build(plots2[[j]])
+        p2.build <- ggplot_build(plt)
         
-        x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
-        x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
+        # x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
+        # x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
 
         y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                       expand = c(0, 0)) +
-                        scale_x_continuous(limits = c(x.min, x.max),
-                                                      expand = c(0, 0))
-        plots2[[j]] <- plots2[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                        expand = c(0, 0)) +
-                        scale_x_continuous(limits = c(x.min, x.max),
-                                                      expand = c(0, 0))
+                                                       expand = c(0, 0))
+                        # scale_x_continuous(limits = c(x.min, x.max),
+                        #                               expand = c(0, 0))
+        
+        plt <- plt + scale_y_continuous(limits = c(y.min, y.max),
+                                        expand = c(0, 0))
+                        # scale_x_continuous(limits = c(x.min, x.max),
+                        #                               expand = c(0, 0))
+        
+        plots[[j]] <- cbind(ggplotGrob(plots[[j]]), ggplotGrob(plt), size = "last")
       }
       
-      if (i == 0) {
-        output$plot.ui <- renderUI({
-          fluidPage(verbatimTextOutput("no.selection"))
-          
-          output$no.selection <- renderPrint({
-            print("No plots selected.")
-          })
+      if (input$overlaid.scatter == T) {
+        j <- j + 1
+        mat <- as.data.frame(fit$model)
+        
+        names <- colnames(mat)
+        
+        colnames(mat) <- c("Y", "X")
+        
+        int1 <- fit$coefficients[1]
+        int2 <- fit2$coefficients[1]
+        
+        slope1 <- fit$coefficients[2]
+        slope2 <- fit2$coefficients[2]
+        
+        title.name <- input$formula.text
+        
+        plt <- ggplot(data = mat, aes(x = X, y = Y)) +
+                 ggtitle(title.name) +
+                 xlab(names[2]) +
+                 ylab(names[1]) +
+                 geom_point() +
+                 geom_abline(slope = slope1, intercept = int1, color = "black") +
+                 geom_abline(slope = slope2, intercept = int2, color = "blue") +
+                 scale_color_manual("",
+                                    breaks = input$fit.option,
+                                    values = c("black", "blue"))
+        
+        plots[[j]] <- ggplotGrob(plt)
+      }
+      
+      if (j == 0) {
+        output$linRegress.plot.ui <- renderUI({
+          fluidPage(
+            fluidRow(verbatimTextOutput("no.selection"))
+          )
         })
       } else {
         values$plots        <- plots
-        values$num.plots    <- i
+        values$num.plots    <- j
         values$active.index <- 1
         values$active.plot  <- plots[[1]]
         
-        values$plots2        <- plots2
-        values$num.plots2    <- j
-        values$active.index2 <- 1
-        values$active.plot2  <- plots2[[1]]
-        
         if (i > 1) {
-          output$plot.ui <- renderUI({
+          output$linRegress.plot.ui <- renderUI({
             fluidPage(
               wellPanel(
                 plotOutput("plot.output")
@@ -911,7 +1022,7 @@ shinyServer(function(input, output) {
             )
           })
         } else {
-          output$plot.ui <- renderUI({
+          output$linRegress.plot.ui <- renderUI({
             fluidPage(
               wellPanel(
                 plotOutput("plot.output")
@@ -921,17 +1032,13 @@ shinyServer(function(input, output) {
         }
         
         output$plot.output <- renderPlot({
-          grid.draw(cbind(ggplotGrob(values$active.plot), ggplotGrob(values$active.plot2), size = "last"))
+          grid.draw(values$active.plot)
         })
       }
     } else {
       if (i == 0) {
-        output$plot.ui <- renderUI({
+        output$linRegress.plot.ui <- renderUI({
           fluidPage(verbatimTextOutput("no.selection"))
-          
-          output$no.selection <- renderPrint({
-            print("No plots selected.")
-          })
         })
       } else {
         values$plots        <- plots
@@ -940,7 +1047,7 @@ shinyServer(function(input, output) {
         values$active.plot  <- plots[[1]]
         
         if (i > 1) {
-          output$plot.ui <- renderUI({
+          output$linRegress.plot.ui <- renderUI({
             fluidPage(
               wellPanel(
                 plotOutput("plot.output")
@@ -957,7 +1064,7 @@ shinyServer(function(input, output) {
             )
           })
         } else {
-          output$plot.ui <- renderUI({
+          output$linRegress.plot.ui <- renderUI({
             fluidPage(
               wellPanel(
                 plotOutput("plot.output")
@@ -973,6 +1080,10 @@ shinyServer(function(input, output) {
     }
   })
   
+  output$no.selection <- renderPrint({
+    cat("No plots selected.")
+  })
+  
   # On button press, show next plot(s)
   observeEvent(input$next.plot, {
     if (values$num.plots > 0) {
@@ -980,10 +1091,7 @@ shinyServer(function(input, output) {
         values$active.index <- values$active.index %% values$num.plots + 1
         values$active.plot  <- values$plots[[values$active.index]]
         
-        values$active.index2 <- values$active.index2 %% values$num.plots + 1
-        values$active.plot2  <- values$plots2[[values$active.index2]]
-        
-        output$plot.ui <- renderUI({
+        output$linRegress.plot.ui <- renderUI({
           if (values$active.index == values$num.plots) {
             fluidPage(
               wellPanel(
@@ -1025,7 +1133,7 @@ shinyServer(function(input, output) {
         })
         
         output$plot.output <- renderPlot({
-          grid.draw(cbind(ggplotGrob(values$active.plot), ggplotGrob(values$active.plot2), size = "last"))
+          grid.draw(values$active.plot)
         })
       } else {
         
@@ -1033,7 +1141,7 @@ shinyServer(function(input, output) {
       
         values$active.plot <- values$plots[[values$active.index]]
         
-        output$plot.ui <- renderUI({
+        output$linRegress.plot.ui <- renderUI({
           if (values$active.index == values$num.plots) {
             fluidPage(
               wellPanel(
@@ -1088,10 +1196,7 @@ shinyServer(function(input, output) {
         values$active.index <- values$num.plots + (values$active.index - 1) %% (-values$num.plots)
         values$active.plot  <- values$plots[[values$active.index]]
         
-        values$active.index2 <- values$num.plots + (values$active.index2 - 1) %% (-values$num.plots)
-        values$active.plot2  <- values$plots2[[values$active.index2]]
-        
-        output$plot.ui <- renderUI({
+        output$linRegress.plot.ui <- renderUI({
           if (values$active.index == 1) {
             fluidPage(
               wellPanel(
@@ -1133,14 +1238,14 @@ shinyServer(function(input, output) {
         })
         
         output$plot.output <- renderPlot({
-          grid.draw(cbind(ggplotGrob(values$active.plot), ggplotGrob(values$active.plot2), size = "last"))
+          grid.draw(values$active.plot)
         })
       } else {
         values$active.index <- values$num.plots + (values$active.index - 1) %% (-values$num.plots)
       
         values$active.plot <- values$plots[[values$active.index]]
         
-        output$plot.ui <- renderUI({
+        output$linRegress.plot.ui <- renderUI({
           if (values$active.index == 1) {
             fluidPage(
               wellPanel(
@@ -1188,6 +1293,7 @@ shinyServer(function(input, output) {
     }
   })
   
+  # Reset all windows once new data set is loaded
   observeEvent(input$display.table, {
     if (values$regress.active) {
       output$results.LinRegress <- renderPrint({ invisible() })
@@ -1196,18 +1302,19 @@ shinyServer(function(input, output) {
     }
     
     if (values$plots.active) {
-      output$plot.ui <- renderUI({ invisible() })
+      output$linRegress.plot.ui <- renderUI({ invisible() })
       
       values$plots.active <- F
     }
     
-    updateTabsetPanel(session = getDefaultReactiveDomain(), "linear.tabs",
+    updateTabsetPanel(session  = getDefaultReactiveDomain(), "linear.tabs",
                       selected = "linear.model")
   })
   
+  # Reset plotting window for linear regression
   observeEvent(input$display.LinRegress, {
     if (values$plots.active) {
-      output$plot.ui <- renderUI({ invisible() })
+      output$linRegress.plot.ui <- renderUI({ invisible() })
       
       values$plots.active <- F
     }

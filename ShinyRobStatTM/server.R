@@ -8,6 +8,7 @@
 #              parameters
 
 library(DT)
+library(fit.models)
 library(ggplot2)
 library(grid)
 library(gridExtra)
@@ -15,6 +16,7 @@ library(PerformanceAnalytics)
 library(RobStatTM)
 library(robustbase)
 library(shiny)
+library(xts)
 
 thm <- theme_bw() +
        theme(plot.title = element_text(hjust = 0.5))
@@ -43,6 +45,30 @@ lmrobdetMM <- function(form, ...) {
   fit <- RobStatTM::lmrobdetMM(form, ...)
   fit$call <- form
   return(fit)
+}
+
+# Add classes to lmfm and covfm in fit.models registry
+fmclass.add.class("lmfm", "lmrobM", warn = F)
+fmclass.add.class("lmfm", "lmrobdetMM", warn = F)
+fmclass.add.class("lmfm", "lmrobdetDCML", warn = F)
+
+fmclass.add.class("covfm", "covClassic", warn = F)
+fmclass.add.class("covfm", "covRob", warn = F)
+
+covRobMM.temp <- function(data, ...) {
+  z <- covRobMM(data, ...)
+  z$call <- match.call()
+  class(z) <- "covRob"
+  
+  return(z)
+}
+
+covRobRocke.temp <- function(data, ...) {
+  z <- covRobRocke(data, ...)
+  z$call <- match.call()
+  class(z) <- "covRob"
+  
+  return(z)
 }
 
 # Back-end implementation of Shiny server
@@ -78,13 +104,23 @@ shinyServer(function(input, output) {
   observeEvent(input$display.table, {
     output$data.panel <- renderUI({
       fluidPage(
+        # Create Data table
         fluidRow(
-          column(1, uiOutput("data.info"))
+          wellPanel(DT::dataTableOutput("contents.table"))
         ),
         
-        # Create Data table
-        wellPanel(DT::dataTableOutput("contents.table"))
+        fluidRow(
+          column(2, offset = 5,
+            actionLink("data.info.link", label = "More Info")
+          )
+        )
       )
+    })
+    
+    output$data.info <- 
+    
+    output$contents.table <- DT::renderDataTable({
+      contents_table()
     })
   })
   
@@ -119,16 +155,11 @@ shinyServer(function(input, output) {
     # Get variable names
     values$dat.variables <- colnames(values$dat)
     
+    values$dat.numeric <- values$dat[, sapply(values$dat, is.numeric) | sapply(values$dat, is.integer)]
+    
+    values$dat.numeric.variables <- colnames(values$dat.numeric)
+    
     return (as.data.frame(values$dat))
-  })
-  
-  # Create data table
-  output$contents.table <- DT::renderDataTable({
-    contents_table()
-  })
-  
-  observeEvent(input$display.table, {
-    actionLink("more.info", label = "More Info")
   })
   
   observeEvent(input$more.info, {
@@ -185,43 +216,105 @@ shinyServer(function(input, output) {
   
   ## Running Regression ##
   
-  values$regress.methods <- c("LS", "M", "MM", "DCML")
-  values$regress.models  <- c("lm", "lmrobM", "lmrobdetMM", "lmrobdetDCML")
+  values$linRegress.methods <- c("LS", "M", "MM", "DCML")
+  values$linRegress.functions  <- c("lm", "lmrobM", "lmrobdetMM", "lmrobdetDCML")
+  
+  output$linRegress.options <- renderUI({
+    if (input$linRegress.second.method) {
+      tabPanel("",
+        fluidRow(
+          column(6,
+            selectInput("linRegress.fit.option", "Method",
+                        choices   = c("LS", "M", "MM", "DCML"),
+                        selected  = "MM"),
+            
+            # List of dependent variables, must be selected
+            uiOutput("linRegress.select.dependent"),
+            
+            # List of predictors to choose from
+            uiOutput("linRegress.select.independent"),
+            
+            # String representing regression formula of form Y ~ X_0 + ... + X_n
+            uiOutput("linRegress.formula"),
+            
+            # Interface to robust options
+            uiOutput("linRegress.robust.control")
+          ),
+          
+          column(6,
+            selectInput("linRegress.fit.option2", "Method",
+                        choices   = c("LS", "M", "MM", "DCML"),
+                        selected  = "MM"),
+            
+            # List of dependent variables, must be selected
+            uiOutput("linRegress.select.dependent2"),
+            
+            # List of predictors to choose from
+            uiOutput("linRegress.select.independent2"),
+            
+            # String representing regression formula of form Y ~ X_0 + ... + X_n
+            uiOutput("linRegress.formula2"),
+            
+            # Interface to robust options
+            uiOutput("linRegress.robust.control2")
+          )
+        )
+      )
+    } else {
+      tabPanel("",
+        selectInput("linRegress.fit.option", "Method",
+                    choices   = c("LS", "M", "MM", "DCML"),
+                    selected  = "MM"),
+        
+        # List of dependent variables, must be selected
+        uiOutput("linRegress.select.dependent"),
+        
+        # List of predictors to choose from
+        uiOutput("linRegress.select.independent"),
+        
+        # String representing regression formula of form Y ~ X_0 + ... + X_n
+        uiOutput("linRegress.formula"),
+        
+        # Interface to robust options
+        uiOutput("linRegress.robust.control")
+      )
+    }
+  })
 
-  output$select.dependent.LinRegress <- renderUI({
+  output$linRegress.select.dependent <- renderUI({
     # If there is no data, do nothing
     if (is.null(dim(values$dat))) {
       return("")
     }
     
     # Render select input for variables
-    selectInput("dependent.var.LinRegress", "Dependent",
+    selectInput("linRegress.dependent", "Dependent",
                 choices = values$dat.variables)
   })
 
-  output$select.independent.LinRegress <- renderUI({
+  output$linRegress.select.independent <- renderUI({
     # If no dependent variable is selected, do nothing
-    if (is.null(input$dependent.var.LinRegress)) {
+    if (is.null(input$linRegress.dependent)) {
       return("")
     }
     
-    ind.vars <- setdiff(values$dat.variables, input$dependent.var.LinRegress)
+    ind.vars <- setdiff(values$dat.variables, input$linRegress.dependent)
     
     # Render select input for variables
-    selectInput("independent.var.LinRegress", "Independent",
+    selectInput("linRegress.independent", "Independent",
                 choices  = ind.vars,
                 selected = ind.vars[1],
                 multiple = TRUE)
   })
   
-  output$formula.LinRegress <- renderUI({
-    if (is.null(input$dependent.var.LinRegress)) {
+  output$linRegress.formula <- renderUI({
+    if (is.null(input$linRegress.dependent)) {
       return("")
     }
     
-    formula.str <- paste(input$dependent.var.LinRegress, " ~ ")
+    formula.str <- paste(input$linRegress.dependent, " ~ ")
     
-    ind.vars <- input$independent.var.LinRegress
+    ind.vars <- input$linRegress.independent
     
     n <- length(ind.vars)
     
@@ -233,25 +326,98 @@ shinyServer(function(input, output) {
     
     formula.str <- paste(formula.str, ind.vars[n])
     
-    textInput("formula.text", "Formula",
+    textInput("linRegress.formula.text", "Formula",
+              formula.str)
+  })
+  
+  output$linRegress.select.dependent2 <- renderUI({
+    # If there is no data, do nothing
+    if (is.null(dim(values$dat))) {
+      return("")
+    }
+    
+    # Render select input for variables
+    selectInput("linRegress.dependent2", "Dependent",
+                choices = values$dat.variables)
+  })
+
+  output$linRegress.select.independent2 <- renderUI({
+    # If no dependent variable is selected, do nothing
+    if (is.null(input$linRegress.dependent2)) {
+      return("")
+    }
+    
+    ind.vars <- setdiff(values$dat.variables, input$linRegress.dependent2)
+    
+    # Render select input for variables
+    selectInput("linRegress.independent2", "Independent",
+                choices  = ind.vars,
+                selected = ind.vars[1],
+                multiple = TRUE)
+  })
+  
+  output$linRegress.formula2 <- renderUI({
+    if (is.null(input$linRegress.dependent)) {
+      return("")
+    }
+    
+    formula.str <- paste(input$linRegress.dependent2, " ~ ")
+    
+    ind.vars <- input$linRegress.independent2
+    
+    n <- length(ind.vars)
+    
+    if (n > 1) {
+      for (i in 1:(n - 1)) {
+        formula.str <- paste(formula.str, ind.vars[i], " + ")
+      }
+    }
+    
+    formula.str <- paste(formula.str, ind.vars[n])
+    
+    textInput("linRegress.formula.text2", "Formula",
               formula.str)
   })
   
   output$linRegress.robust.control <- renderUI({
-    if (any(input$fit.option != "LS")) {
-      fl.mult.selected <- F
-      
-      if (length(input$fit.option) == 1) {
-        fl.mult.selected <- input$linRegress.duplicate
+    if (input$linRegress.fit.option != "LS") {
+      if (input$linRegress.second.method == TRUE) {
+        req(input$linRegress.fit.option2)
+        
+        if(input$linRegress.fit.option2 != "LS") {
+          tabPanel("",
+            tags$hr(),
+            
+            h4("Robust Controls 1"),
+            
+            selectInput("linRegress.family", "Family",
+                        choices = c("Bi-square" = "bisquare",
+                                    "Opt."      = "optimal",
+                                    "Mod. Opt." = "modified.optimal"),
+                        selected = "modified.optimal"),
+            
+            numericInput("linRegress.eff", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01)
+          )
+        } else {
+          tabPanel("",
+            tags$hr(),
+            
+            h4("Robust Controls"),
+            
+            selectInput("linRegress.family", "Family",
+                        choices = c("Bi-square" = "bisquare",
+                                    "Opt."      = "optimal",
+                                    "Mod. Opt." = "modified.optimal"),
+                        selected = "modified.optimal"),
+            
+            numericInput("linRegress.eff", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01)
+          )
+        }
       } else {
-        fl.mult.selected <- all(input$fit.option != "LS")
-      }
-      
-      if (fl.mult.selected) {
         tabPanel("",
           tags$hr(),
           
-          h4("Robust Controls 1"),
+          h4("Robust Controls"),
           
           selectInput("linRegress.family", "Family",
                       choices = c("Bi-square" = "bisquare",
@@ -259,8 +425,16 @@ shinyServer(function(input, output) {
                                   "Mod. Opt." = "modified.optimal"),
                       selected = "modified.optimal"),
           
-          numericInput("linRegress.eff", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01),
-          
+          numericInput("linRegress.eff", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01)
+        )
+      }
+    }
+  })
+  
+  output$linRegress.robust.control2 <- renderUI({
+    if (input$linRegress.fit.option2 != "LS") {
+      if (input$linRegress.fit.option != "LS") {
+        tabPanel("",
           tags$hr(),
           
           h4("Robust Controls 2"),
@@ -292,100 +466,103 @@ shinyServer(function(input, output) {
   })
   
   observeEvent(input$linRegress.display, {
-    if (is.null(input$independent.var.LinRegress)) {
+    if (is.null(input$linRegress.independent)) {
       output$linRegress.results <- renderPrint({
         cat("ERROR: Missing dependent or independent variables")
       })
-    } else if (!is.numeric(values$dat[, input$dependent.var.LinRegress])) {
+    } else if (!is.numeric(values$dat[, input$linRegress.dependent])) {
       output$linRegress.results <- renderPrint({ invalid_response() })
     }
     
-    index <- match(input$fit.option, values$regress.methods)
+    if (input$linRegress.second.method) {
+      methods <- c(input$linRegress.fit.option, input$linRegress.fit.option2)
+      
+      index <- match(methods, values$linRegress.methods)
     
-    n <- length(index)
+      n <- length(index)
     
-    model <-sapply(index,
-                    function(i, m) {
-                      m[i]
-                    },
-                    values$regress.models)
+      model <- sapply(index,
+                      function(i, m) {
+                        m[i]
+                      },
+                      values$linRegress.functions)
+    } else {
+      model <- values$linRegress.functions[match(input$linRegress.fit.option, values$linRegress.methods)]
+    }
     
     fit <- vector(mode = "list", length = length(index))
     if (model[1] == "lm") {
-      fit[[1]] <- do.call(model[1], list(as.formula(input$formula.text), data = values$dat))
+      fit[[1]] <- do.call(model[1], list(as.formula(input$linRegress.formula.text), data = values$dat))
     } else {
       control <- lmrobdet.control(efficiency = input$linRegress.eff,
                                   family = input$linRegress.family,
                                   compute.rd = T)
     
-      fit[[1]] <- do.call(model[1], list(as.formula(input$formula.text),
+      fit[[1]] <- do.call(model[1], list(as.formula(input$linRegress.formula.text),
                                          data    = values$dat,
                                          control = control))
     }
     
-    if (length(index) == 2) {
+    fit[[1]]$call <- call(model[1], as.formula(input$linRegress.formula.text))
+    
+    if (input$linRegress.second.method) {
       if (model[2] == "lm") {
-        fit[[2]] <- do.call(model[2], list(as.formula(input$formula.text), data = values$dat))
+        fit[[2]] <- do.call(model[2], list(as.formula(input$linRegress.formula.text2), data = values$dat))
       } else {
-        fit[[2]] <- do.call(model[2], list(as.formula(input$formula.text),
+        control2 <- lmrobdet.control(efficiency = input$linRegress.eff2,
+                                    family = input$linRegress.family2,
+                                    compute.rd = T)
+      
+        fit[[2]] <- do.call(model[2], list(as.formula(input$linRegress.formula.text2),
                                            data    = values$dat,
-                                           control = control))
+                                           control = control2))
       }
-    } else if (input$linRegress.duplicate) {
+        
+      fit[[2]]$call <- call(model[2], as.formula(input$linRegress.formula.text2))
       
-      control <- lmrobdet.control(efficiency = as.numeric(input$linRegress.eff2),
-                                family = input$linRegress.family2,
-                                compute.rd = T)
-      
-      fit[[2]] <- do.call(model[1], list(as.formula(input$formula.text),
-                                           data    = values$dat,
-                                           control = control))
+      fm <- fit.models(fit[[1]], fit[[2]])
+    } else {
+      fm <- fit.models(fit[[1]])
     }
 
     values$regress.active <- T
     
-    if (input$linRegress.duplicate) {
-      values$linRegress.models <- c(paste(input$fit.option[1], "1"), paste(input$fit.option[1], "2"))
+    if (input$linRegress.second.method) {
+      if (input$linRegress.fit.option == input$linRegress.fit.option2) {
+        values$linRegress.models <- c(paste(input$linRegress.fit.option, "1"), paste(input$linRegress.fit.option[1], "2"))
+      } else {
+        values$linRegress.models <- c(input$linRegress.fit.option, input$linRegress.fit.option2)
+      }
     } else {
-      values$linRegress.models <- input$fit.option
+      values$linRegress.models <- input$linRegress.fit.option
     }
+    
+    names(fm) <- values$linRegress.models
       
     output$linRegress.results <- renderPrint({
-      values$fit1 <- fit[[1]]
+      values$linRegress.fm <- fm
       
-      cat(paste(values$linRegress.models[1], '\n'))
+      values$linRegress.fit <- fm[[1]]
       
-      print(summary(values$fit1))
+      print(summary(values$linRegress.fm))
       
-      values$num.fits <- length(fit)
+      values$num.fits <- length(fm)
         
       if (values$num.fits == 2) {
-        values$fit2 <- fit[[2]]
-        
-        cat(paste(values$linRegress.models[2], '\n'))
-        
-        print(summary(values$fit2))
+        values$linRegress.fit2 <- fm[[2]]
       }
     })
   })
   
   invalid_response <- eventReactive(input$linRegress.display, {
     return(paste("ERROR: Response variable is of",
-                 class(values$dat[, input$dependent.var.LinRegress]),
+                 class(values$dat[, input$linRegress.dependent]),
                  "type. Please select a response variable with numeric values"))
   })
   
   
   
   ## Plotting ##
-  
-  output$overlaid.scatter.option <- renderUI({
-    if (values$num.fits == 2 && length(input$independent.var.LinRegress) == 1) {
-      checkboxInput("overlaid.scatter", "Scatter with Overlaid Fits", TRUE)
-    } else {
-      return("")
-    }
-  })
   
   output$extreme.points <- renderUI({
     if (is.null(dim(values$dat))) {
@@ -400,17 +577,17 @@ shinyServer(function(input, output) {
                  max = num.obs)
   })
   
-  observeEvent(input$display.plots, {
+  observeEvent(input$linRegress.display.plots, {
     values$linRegress.plots.active <- T
     
     plots <- vector(mode = "list")
     
     i <- 0
     
-    fit <- values$fit1
+    fit <- values$linRegress.fit
     
     # Residual v. fitted values
-    if (input$residual.fit == T) {
+    if (input$linRegress.residual.fit == T) {
       i <- i + 1
       
       fit.vals <- fitted(fit)
@@ -441,7 +618,7 @@ shinyServer(function(input, output) {
     }
     
     # Response v. fitted values
-    if (input$response.fit == T) {
+    if (input$linRegress.response.fit == T) {
       i <- i + 1
 
       fit.vals <- fitted(fit)
@@ -464,7 +641,7 @@ shinyServer(function(input, output) {
     }
 
     # QQ Plot
-    if (input$qq == T) {
+    if (input$linRegress.qq == T) {
       i <- i + 1
 
       dat <- data.frame(Res = sort(fit$residuals))
@@ -478,7 +655,7 @@ shinyServer(function(input, output) {
       slope <- diff(y) / diff(x)
       int   <- y[1] - slope * x[1]
       
-      if (input$qq.env == T) {
+      if (input$linRegress.qq.env == T) {
         confidence.level <- 0.95
         n <- length(fit$residuals)
         P <- ppoints(n)
@@ -494,8 +671,7 @@ shinyServer(function(input, output) {
 
       # Normal QQ plot
       
-      
-      if (input$qq.env == T) {
+      if (input$linRegress.qq.env == T) {
         plots[[i]] <- ggplot(data = dat, aes(x = z, y = Res)) +
                         ggtitle(title.name) +
                         xlab("Normal Quantiles") +
@@ -570,7 +746,7 @@ shinyServer(function(input, output) {
     }
     
     # Estimated residual density
-    if (input$residual.density == T) {
+    if (input$linRegress.residual.density == T) {
       i <- i + 1
       
       dat <- data.frame(Res = fit$residuals)
@@ -635,10 +811,10 @@ shinyServer(function(input, output) {
     if (values$num.fits == 2) {
       j <- 0
       
-      fit2 <- values$fit2
+      fit2 <- values$linRegress.fit2
       
       # Residual v. fitted values
-      if (input$residual.fit == T) {
+      if (input$linRegress.residual.fit == T) {
         j <- j + 1
         
         fit.vals <- fitted(fit2)
@@ -670,11 +846,11 @@ shinyServer(function(input, output) {
         p1.build <- ggplot_build(plots[[j]])
         p2.build <- ggplot_build(plt)
         
-        x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
-        x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
+        x.min <- min(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
+        x.max <- max(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
 
-        y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
-        y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        y.min <- min(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
+        y.max <- max(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
         
         plots[[j]] <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0)) +
@@ -689,7 +865,7 @@ shinyServer(function(input, output) {
       }
       
       # Response v. fitted values
-      if (input$response.fit == T) {
+      if (input$linRegress.response.fit == T) {
         j <- j + 1
   
         fit.vals <- fitted(fit2)
@@ -711,11 +887,11 @@ shinyServer(function(input, output) {
         p1.build <- ggplot_build(plots[[j]])
         p2.build <- ggplot_build(plt)
         
-        x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
-        x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
+        x.min <- min(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
+        x.max <- max(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
 
-        y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
-        y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        y.min <- min(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
+        y.max <- max(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0)) +
@@ -731,7 +907,7 @@ shinyServer(function(input, output) {
       }
   
       # QQ Plot
-      if (input$qq == T) {
+      if (input$linRegress.qq == T) {
         j <- j + 1
   
         dat <- data.frame(Res = sort(fit2$residuals))
@@ -744,7 +920,7 @@ shinyServer(function(input, output) {
         slope <- diff(y) / diff(x)
         int   <- y[1] - slope * x[1]
         
-        if (input$qq.env == T) {
+        if (input$linRegress.qq.env == T) {
           confidence.level <- 0.95
           n <- length(fit2$residuals)
           P <- ppoints(n)
@@ -777,11 +953,11 @@ shinyServer(function(input, output) {
         p1.build <- ggplot_build(plots[[j]])
         p2.build <- ggplot_build(plt)
         
-        x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
-        x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
+        x.min <- min(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
+        x.max <- max(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
 
-        y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
-        y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        y.min <- min(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
+        y.max <- max(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0)) +
@@ -853,11 +1029,11 @@ shinyServer(function(input, output) {
         p1.build <- ggplot_build(plots[[j]])
         p2.build <- ggplot_build(plt)
         
-        x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
-        x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
+        x.min <- min(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
+        x.max <- max(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
 
-        y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
-        y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        y.min <- min(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
+        y.max <- max(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
         
         plots[[j]] <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0)) +
@@ -873,7 +1049,7 @@ shinyServer(function(input, output) {
       }
       
       # Estimated residual density
-      if (input$residual.density == T) {
+      if (input$linRegress.residual.density == T) {
         j <- j + 1
         
         dat <- data.frame(Res = fit2$residuals)
@@ -900,11 +1076,11 @@ shinyServer(function(input, output) {
         p1.build <- ggplot_build(plots[[j]])
         p2.build <- ggplot_build(plt)
         
-        x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
-        x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
+        x.min <- min(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
+        x.max <- max(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
 
-        y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
-        y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        y.min <- min(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
+        y.max <- max(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0)) +
@@ -956,11 +1132,11 @@ shinyServer(function(input, output) {
         p1.build <- ggplot_build(plots[[j]])
         p2.build <- ggplot_build(plt)
         
-        # x.min <- min(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
-        # x.max <- max(p1.build$layout$panel_ranges[[1]]$x.range, p2.build$layout$panel_ranges[[1]]$x.range)
+        # x.min <- min(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
+        # x.max <- max(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
 
-        y.min <- min(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
-        y.max <- max(p1.build$layout$panel_ranges[[1]]$y.range, p2.build$layout$panel_ranges[[1]]$y.range)
+        y.min <- min(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
+        y.max <- max(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0))
@@ -975,7 +1151,7 @@ shinyServer(function(input, output) {
         plots[[j]] <- cbind(ggplotGrob(plots[[j]]), ggplotGrob(plt), size = "last")
       }
       
-      if (input$overlaid.scatter == T) {
+      if (input$linRegress.overlaid.scatter == T) {
         j <- j + 1
         mat <- as.data.frame(fit$model)
         
@@ -989,7 +1165,7 @@ shinyServer(function(input, output) {
         slope1 <- fit$coefficients[2]
         slope2 <- fit2$coefficients[2]
         
-        title.name <- input$formula.text
+        title.name <- input$linRegress.formula.text
         
         plt <- ggplot(data = mat, aes(x = X, y = Y)) +
                  ggtitle(title.name) +
@@ -1304,6 +1480,49 @@ shinyServer(function(input, output) {
         })
       }
     }
+  })
+  
+  output$covariance.select.variables <- renderUI({
+    if (is.null(dim(values$dat))) {
+      return("")
+    }
+    
+    selectInput("covariance.variables", "variables",
+                choices = values$dat.numeric.variables,
+                selected = values$dat.numeric.variables,
+                multiple = TRUE)
+  })
+  
+  observeEvent(input$covariance.display, {
+    
+    if (input$covariance.method == "Classic") {
+      values$covariance.fit <- covClassic(values$dat.numeric[, input$covariance.variables])
+    } else if (input$covariance.method == "Robust") {
+      if (input$covariance.estimator == "MM") {
+        
+      } else if (input$covariance.estimator == "Rocke") {
+        
+      } else {
+        values$covariance.fit <- covRob(values$dat.numeric)
+      }
+    } else {
+      values$covariance.fit <- fit.models(c("covClassic", "covRob"), data = values$dat.numeric[, input$covariance.variables])
+    }
+    
+    output$covariance.results <- renderPrint({
+      print(summary(values$covariance.fit))
+    })
+  })
+  
+  output$pca.select.variables <- renderUI({
+    if (is.null(dim(values$dat))) {
+      return("")
+    }
+    
+    selectInput("pca.variables", "variables",
+                choices = values$dat.numeric.variables,
+                selected = values$dat.numeric.variables,
+                multiple = TRUE)
   })
   
   # Reset all windows once new data set is loaded

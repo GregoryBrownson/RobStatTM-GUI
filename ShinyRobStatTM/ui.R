@@ -127,7 +127,7 @@ shinyUI(navbarPage("RobStatTM",
       # Panel for displaying the dataframe
       mainPanel(
         tags$head(tags$style(HTML(CSS.format1))),
-        
+            
         uiOutput("data.panel")
       )
     )
@@ -193,31 +193,9 @@ shinyUI(navbarPage("RobStatTM",
               tags$head(tags$script(HTML(JS.log10))),
               tags$head(tags$script(HTML(JS.onCall))),
               
-              selectizeInput("fit.option", "Method",
-                             choices   = c("LS", "M", "MM", "DCML"),
-                             selected  = "MM",
-                             options   = list(maxItems = 2,
-                                              placeholder = 'Select up to 2 methods',
-                                              hideSelected = F,
-                                              duplicates = T)),
+              checkboxInput("linRegress.second.method", "Add Second Method", value = FALSE),
               
-              # List of dependent variables, must be selected
-              uiOutput("select.dependent.LinRegress"),
-              
-              # List of predictors to choose from
-              uiOutput("select.independent.LinRegress"),
-              
-              # String representing regression formula of form Y ~ X_0 + ... + X_n
-              uiOutput("formula.LinRegress"),
-              
-              conditionalPanel(
-                condition = "input['fit.option'].length == 1",
-                
-                checkboxInput("linRegress.duplicate", "Add Second Regression", value = FALSE)
-              ),
-              
-              # Interface to robust options
-              uiOutput("linRegress.robust.control"),
+              uiOutput("linRegress.options"),
         
               # Button to run selected regression
               actionButton("linRegress.display", "Results")
@@ -238,25 +216,29 @@ shinyUI(navbarPage("RobStatTM",
               tags$head(tags$style(HTML(CSS.format1))),
               tags$head(tags$style(HTML("hr {border-top: 1px solid #000000;}"))),
               h4("Plots"),
-              checkboxInput("residual.fit", "Residuals v. Fit", TRUE),
-              checkboxInput("response.fit", "Response v. Fit", TRUE),
-              checkboxInput("qq", "Residuals Normal QQ Plot", TRUE),
+              checkboxInput("linRegress.residual.fit", "Residuals v. Fit", TRUE),
+              checkboxInput("linRegress.response.fit", "Response v. Fit", TRUE),
+              checkboxInput("linRegress.qq", "Residuals Normal QQ Plot", TRUE),
               checkboxInput("linRegress.resid.dist", "Std. Residuals v. Robust Distances", TRUE),
-              checkboxInput("residual.density", "Estimated Residual Density", TRUE),
+              checkboxInput("linRegress.residual.density", "Estimated Residual Density", TRUE),
               checkboxInput("linRegress.resid.index", "Std. Residuals v. Index (Time)", TRUE),
-              uiOutput("overlaid.scatter.option"),
+              conditionalPanel(
+                condition = "input['linRegress.second.method']",
+                
+                checkboxInput("linRegress.overlaid.scatter", "Scatter with Overlaid Fits", TRUE)
+              ),
               
               tags$hr(),
               
               h4("Options"),
               checkboxInput("include.smooth", "Include Smooth", TRUE),
               checkboxInput("include.rugplot", "Include Rugplot", FALSE),
-              checkboxInput("qq.env", "QQ Plot Envelope", TRUE),
-              checkboxInput("qqline.robust", "Include Robust QQ Line", TRUE),
+              checkboxInput("linRegress.qq.env", "QQ Plot Envelope", TRUE),
+              checkboxInput("linRegress.qqline.robust", "Include Robust QQ Line", TRUE),
               uiOutput("extreme.points"),
               
               # Button to run selected regression
-              actionButton("display.plots", "View Plots")
+              actionButton("linRegress.display.plots", "View Plots")
             ),
           
             mainPanel(
@@ -277,56 +259,6 @@ shinyUI(navbarPage("RobStatTM",
               
             )
           )
-        ),
-        
-        tabPanel("Advanced",
-          fluidPage(
-            fluidRow(
-              column(6,
-                tags$head(tags$style(HTML(CSS.format1))),
-                     
-                wellPanel(
-                  h4("Final Estimator"),
-                  
-                  selectInput("linRegress.family.temp", "Loss Function",
-                              choices  = c("Bi-square" = "bisquare",
-                                           "Opt."   = "optimal",
-                                           "Mod. Opt." = "modified.optimal"),
-                              selected = "modified.optimal"),
-          
-                  numericInput("linRegress.eff.temp", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01)
-                ),
-                
-                wellPanel(
-                  h4("Maximum Iterations"),
-                  
-                  numericInput("linRegress.final.M.estimate", "Final M-estimate", value = 50, min = 1, step = 1),
-          
-                  numericInput("linRegress.resid.scale", "Resid. Scale", value = 200, min = 1, step = 1),
-                  
-                  numericInput("linRegress.S.refine", "S-Refinement", value = 50, min = 1, step = 1)
-                )
-              ),
-              
-              column(6,
-                wellPanel(
-                  h4("Tolerance Control"),
-                  
-                  numericInput("linRegress.convergence", "Convergence", value = 0.0000001,
-                                                                        min   = 0.0000000000000001,
-                                                                        step  = 0.00000001),
-                  
-                  numericInput("linRegress.scale.threshold", "Scale Threshold", value = 0.0000001,
-                                                                                min   = 0.0000000000000001,
-                                                                                step  = 0.00000001),
-                  
-                  numericInput("linRegress.rank.threshold", "Rank Threshold", value = 0.00000015,
-                                                                              min   = 0.000000000001,
-                                                                              step  = 0.00000001)
-                )
-              )
-            )
-          )
         )
       )
     ),
@@ -337,15 +269,27 @@ shinyUI(navbarPage("RobStatTM",
           sidebarLayout(
             sidebarPanel(
               tags$head(tags$style(HTML(CSS.format1))),
+              
+              uiOutput("covariance.select.variables"),
+              
               radioButtons("covariance.method", "Method",
                           choices = c("Both", "Classical", "Robust")),
               
               radioButtons("covariance.type", "Type",
-                          choices = c("Covariances", "Correlations"))
+                          choices = c("Covariances", "Correlations")),
+              
+              conditionalPanel("input['covariance.method'] != 'Classical'",
+                selectInput("covariance.estimator", "Robust Covariance Estimator",
+                            choices = c("MM", "Rocke"))
+              ),
+              
+              actionButton("covariance.display", "Results")
             ),
             
             mainPanel(
+              tags$head(tags$style(HTML(CSS.format1))),
               
+              verbatimTextOutput("covariance.results")
             )
           )
         ),
@@ -354,16 +298,22 @@ shinyUI(navbarPage("RobStatTM",
           sidebarLayout(
             sidebarPanel(
               tags$head(tags$style(HTML(CSS.format1))),
+              
               h4("Plots"),
+              
               checkboxInput("covariance.eigen", "Eigenvalues", TRUE),
               checkboxInput("covariance.mahalanobis", "Mahalanobis Distances", TRUE),
               checkboxInput("covariance.dist.dist", "Distance-Distance Plot", TRUE),
               checkboxInput("covariance.ellipses.matrix", "Ellipses Matrix", TRUE),
-              checkboxInput("covariance.image.display", "Image Display", TRUE)
+              checkboxInput("covariance.image.display", "Image Display", TRUE),
+              
+              actionButton("covariance.display.plots", "View Plots")
             ),
             
             mainPanel(
+              tags$head(tags$style(HTML(CSS.format1))),
               
+              uiOutput("covariance.plot.ui")
             )
           )
         )
@@ -372,19 +322,31 @@ shinyUI(navbarPage("RobStatTM",
     
     tabPanel("PCA",
       tabsetPanel(id = "pca.tabs", type = "tabs",
-        tabPanel(title = "Estimates", value = "covariance.est",
+        tabPanel(title = "Estimates", value = "pca.est",
           sidebarLayout(
             sidebarPanel(
               tags$head(tags$style(HTML(CSS.format1))),
-              radioButtons("covariance.method", "Method",
+              
+              uiOutput("pca.select.variables"),
+              
+              radioButtons("pca.method", "Method",
                           choices = c("Both", "Classical", "Robust")),
               
-              radioButtons("covariance.type", "Type",
-                          choices = c("Covariances", "Correlations"))
+              radioButtons("pca.type", "Type",
+                          choices = c("Covariances", "Correlations")),
+              
+              conditionalPanel("input['pca.method'] != 'Classical'",
+                selectInput("pca.estimator", "Robust PCA Estimator",
+                            choices = c("MM", "Rocke"))                 
+              ),
+              
+              actionButton("pca.display", "Results")
             ),
             
             mainPanel(
+              tags$head(tags$style(HTML(CSS.format1))),
               
+              verbatimTextOutput("pca.results")
             )
           )
         ),
@@ -396,11 +358,15 @@ shinyUI(navbarPage("RobStatTM",
               h4("Plots"),
               checkboxInput("pca.scatter", "Scatter Plots", TRUE),
               checkboxInput("pca.loadings", "Loadings", TRUE),
-              checkboxInput("pca.scree", "Screeplot", TRUE)
+              checkboxInput("pca.scree", "Screeplot", TRUE),
+              
+              actionButton("pca.display.plots", "View Plots")
             ),
             
             mainPanel(
+              tags$head(tags$style(HTML(CSS.format1))),
               
+              uiOutput("pca.plot.ui")
             )
           )
         )

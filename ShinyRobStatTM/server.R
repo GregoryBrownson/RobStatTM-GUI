@@ -57,7 +57,7 @@ fmclass.add.class("covfm", "covRob", warn = F)
 
 covRobMM.temp <- function(data, ...) {
   z <- covRobMM(data, ...)
-  z$call <- match.call()
+  z$call <- call("covRobMM", data = substitute(data))
   class(z) <- "covRob"
   
   return(z)
@@ -65,7 +65,7 @@ covRobMM.temp <- function(data, ...) {
 
 covRobRocke.temp <- function(data, ...) {
   z <- covRobRocke(data, ...)
-  z$call <- match.call()
+  z$call <- call("covRobRocke", data = substitute(data))
   class(z) <- "covRob"
   
   return(z)
@@ -843,14 +843,11 @@ shinyServer(function(input, output) {
           plt <- plt + geom_rug()
         }
         
-        p1.build <- ggplot_build(plots[[j]])
-        p2.build <- ggplot_build(plt)
-        
-        x.min <- min(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
-        x.max <- max(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
+        x.min <- min(layer_scales(plots[[j]])$x$range$range, layer_scales(plt)$x$range$range)
+        x.max <- max(layer_scales(plots[[j]])$x$range$range, layer_scales(plt)$x$range$range)
 
-        y.min <- min(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
-        y.max <- max(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
+        y.min <- min(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
+        y.max <- max(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
         
         plots[[j]] <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0)) +
@@ -884,14 +881,11 @@ shinyServer(function(input, output) {
           plt <- plt + geom_rug()
         }
         
-        p1.build <- ggplot_build(plots[[j]])
-        p2.build <- ggplot_build(plt)
-        
-        x.min <- min(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
-        x.max <- max(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
+        x.min <- min(layer_scales(plots[[j]])$x$range$range, layer_scales(plt)$x$range$range)
+        x.max <- max(layer_scales(plots[[j]])$x$range$range, layer_scales(plt)$x$range$range)
 
-        y.min <- min(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
-        y.max <- max(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
+        y.min <- min(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
+        y.max <- max(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0)) +
@@ -950,14 +944,11 @@ shinyServer(function(input, output) {
                    geom_abline(slope = slope, intercept = int)
         }
         
-        p1.build <- ggplot_build(plots[[j]])
-        p2.build <- ggplot_build(plt)
-        
-        x.min <- min(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
-        x.max <- max(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
+        x.min <- min(layer_scales(plots[[j]])$x$range$range, layer_scales(plt)$x$range$range)
+        x.max <- max(layer_scales(plots[[j]])$x$range$range, layer_scales(plt)$x$range$range)
 
-        y.min <- min(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
-        y.max <- max(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
+        y.min <- min(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
+        y.max <- max(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0)) +
@@ -1026,14 +1017,11 @@ shinyServer(function(input, output) {
                               linetype = 2)
         }
         
-        p1.build <- ggplot_build(plots[[j]])
-        p2.build <- ggplot_build(plt)
-        
-        x.min <- min(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
-        x.max <- max(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
+        x.min <- min(layer_scales(plots[[j]])$x$range$range, layer_scales(plt)$x$range$range)
+        x.max <- max(layer_scales(plots[[j]])$x$range$range, layer_scales(plt)$x$range$range)
 
-        y.min <- min(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
-        y.max <- max(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
+        y.min <- min(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
+        y.max <- max(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
         
         plots[[j]] <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0)) +
@@ -1073,14 +1061,11 @@ shinyServer(function(input, output) {
           plt <- plt + geom_rug()
         }
         
-        p1.build <- ggplot_build(plots[[j]])
-        p2.build <- ggplot_build(plt)
-        
-        x.min <- min(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
-        x.max <- max(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
+        x.min <- min(layer_scales(plots[[j]])$x$range$range, layer_scales(plt)$x$range$range)
+        x.max <- max(layer_scales(plots[[j]])$x$range$range, layer_scales(plt)$x$range$range)
 
-        y.min <- min(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
-        y.max <- max(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
+        y.min <- min(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
+        y.max <- max(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0)) +
@@ -1129,14 +1114,11 @@ shinyServer(function(input, output) {
                    geom_line()
         }
         
-        p1.build <- ggplot_build(plots[[j]])
-        p2.build <- ggplot_build(plt)
-        
-        # x.min <- min(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
-        # x.max <- max(p1.build$layout$panel_scales_x[[1]]$range$range, p2.build$layout$panel_scales_x[[1]]$range$range)
+        # x.min <- min(layer_scales(plots[[j]])$x$range$range, layer_scales(plt)$x$range$range)
+        # x.max <- max(layer_scales(plots[[j]])$x$range$range, layer_scales(plt)$x$range$range)
 
-        y.min <- min(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
-        y.max <- max(p1.build$layout$panel_scales_y[[1]]$range$range, p2.build$layout$panel_scales_y[[1]]$range$range)
+        y.min <- min(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
+        y.max <- max(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
                                                        expand = c(0, 0))

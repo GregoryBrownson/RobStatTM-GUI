@@ -207,7 +207,7 @@ shinyUI(navbarPage("RobStatTM",
               verbatimTextOutput("linRegress.results")
             )
           )
-        ),
+        ), 
         
         # Plot selection
         tabPanel(title = "Plotting", value = "linear.plotting",

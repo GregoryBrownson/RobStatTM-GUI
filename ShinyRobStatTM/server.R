@@ -289,7 +289,7 @@ shinyServer(function(input, output) {
     
     # Render select input for variables
     selectInput("linRegress.dependent", "Dependent",
-                choices = values$dat.variables)
+                choices = values$dat.numeric.variables)
   })
 
   output$linRegress.select.independent <- renderUI({
@@ -338,7 +338,7 @@ shinyServer(function(input, output) {
     
     # Render select input for variables
     selectInput("linRegress.dependent2", "Dependent",
-                choices = values$dat.variables)
+                choices = values$dat.numeric.variables)
   })
 
   output$linRegress.select.independent2 <- renderUI({
@@ -1172,10 +1172,9 @@ shinyServer(function(input, output) {
                  xlab(names[2]) +
                  ylab(names[1]) +
                  geom_point() +
-                 geom_abline(slope = slope1, intercept = int1, color = "black") +
-                 geom_abline(slope = slope2, intercept = int2, color = "blue") +
-                 scale_color_manual("",
-                                    breaks = values$linRegress.models,
+                 geom_abline(aes(slope = slope1, intercept = int1, color = "black")) +
+                 geom_abline(aes(slope = slope2, intercept = int2, color = "blue")) +
+                 scale_color_manual("Method",
                                     values = c("black", "blue"))
         
         plots[[j]] <- ggplotGrob(plt)
@@ -1488,7 +1487,7 @@ shinyServer(function(input, output) {
     }
     
     selectInput("covariance.variables", "variables",
-                choices = values$dat.numeric.variables,
+                choices  = values$dat.numeric.variables,
                 selected = values$dat.numeric.variables,
                 multiple = TRUE)
   })

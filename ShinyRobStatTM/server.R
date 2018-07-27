@@ -55,18 +55,51 @@ fmclass.add.class("lmfm", "lmrobdetDCML", warn = F)
 fmclass.add.class("covfm", "covClassic", warn = F)
 fmclass.add.class("covfm", "covRob", warn = F)
 
-covRobMM.temp <- function(data, ...) {
-  z <- covRobMM(data, ...)
-  z$call <- call("covRobMM", data = substitute(data))
-  class(z) <- "covRob"
+covClassic <- function(data, data.name, ...) {
+  z <- RobStatTM::covClassic(data, ...)
+  z$call <- call("covClassic", data = as.name(data.name))
   
   return(z)
 }
 
-covRobRocke.temp <- function(data, ...) {
-  z <- covRobRocke(data, ...)
-  z$call <- call("covRobRocke", data = substitute(data))
+covRob <- function(data, data.name, corr = F, ...) {
+  z <- RobStatTM::covRob(data, ...)
+  z$corr <- corr
+  z$call <- call("covRob", data = as.name(data.name))
   class(z) <- "covRob"
+  
+  if(corr == T) {
+    D <- sqrt(diag(z$cov))
+    z$cov <- t(diag(1 / D)) %*% z$cov %*% diag(1 / D)
+  }
+  
+  return(z)
+}
+
+covRobMM <- function(data, data.name, corr = F, ...) {
+  z <- RobStatTM::covRob(data, type = "MM", ...)
+  z$corr <- corr
+  z$call <- call("covRobMM", data = as.name(data.name))
+  class(z) <- "covRob"
+  
+  if(corr == T) {
+    D <- sqrt(diag(z$cov))
+    z$cov <- t(diag(1 / D)) %*% z$cov %*% diag(1 / D)
+  }
+  
+  return(z)
+}
+
+covRobRocke <- function(data, data.name, corr = F, ...) {
+  z <- RobStatTM::covRob(data, type = "Rocke", ...)
+  z$corr <- corr
+  z$call <- call("covRobRocke", data = as.name(data.name))
+  class(z) <- "covRob"
+  
+  if (corr == T) {
+    D <- sqrt(diag(z$cov))
+    z$cov <- t(diag(1 / D)) %*% z$cov %*% diag(1 / D)
+  }
   
   return(z)
 }
@@ -546,9 +579,9 @@ shinyServer(function(input, output) {
       
       print(summary(values$linRegress.fm))
       
-      values$num.fits <- length(fm)
+      values$linRegress.num.fits <- length(fm)
         
-      if (values$num.fits == 2) {
+      if (values$linRegress.num.fits == 2) {
         values$linRegress.fit2 <- fm[[2]]
       }
     })
@@ -808,7 +841,7 @@ shinyServer(function(input, output) {
     
     ## 2 Regression Case
     
-    if (values$num.fits == 2) {
+    if (values$linRegress.num.fits == 2) {
       j <- 0
       
       fit2 <- values$linRegress.fit2
@@ -849,14 +882,10 @@ shinyServer(function(input, output) {
         y.min <- min(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
         y.max <- max(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
         
-        plots[[j]] <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                       expand = c(0, 0)) +
-                        scale_x_continuous(limits = c(x.min, x.max),
-                                           expand = c(0, 0))
-        plt <- plt + scale_y_continuous(limits = c(y.min, y.max),
-                                        expand = c(0, 0)) +
-                 scale_x_continuous(limits = c(x.min, x.max),
-                                    expand = c(0, 0))
+        plots[[j]] <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max)) +
+                        scale_x_continuous(limits = c(x.min, x.max))
+        plt <- plt + scale_y_continuous(limits = c(y.min, y.max)) +
+                 scale_x_continuous(limits = c(x.min, x.max))
         
         plots[[j]] <- cbind(ggplotGrob(plots[[j]]), ggplotGrob(plt), size = "last")
       }
@@ -888,14 +917,12 @@ shinyServer(function(input, output) {
         y.max <- max(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                       expand = c(0, 0)) +
-                         scale_x_continuous(limits = c(x.min, x.max),
-                                            expand = c(0, 0))
+                                                       expand = expand_scale(mult = c(0.05, 0.05))) +
+                         scale_x_continuous(limits = c(x.min, x.max))
         
         plt <- plt + scale_y_continuous(limits = c(y.min, y.max),
-                                        expand = c(0, 0)) +
-                 scale_x_continuous(limits = c(x.min, x.max),
-                                    expand = c(0, 0))
+                                        expand = expand_scale(mult = c(0.05, 0.05))) +
+                 scale_x_continuous(limits = c(x.min, x.max))
         
         plots[[j]] <- cbind(ggplotGrob(plots[[j]]), ggplotGrob(plt), size = "last")
       }
@@ -951,14 +978,12 @@ shinyServer(function(input, output) {
         y.max <- max(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                       expand = c(0, 0)) +
-                        scale_x_continuous(limits = c(x.min, x.max),
-                                           expand = c(0, 0))
+                                                       expand = expand_scale(mult = c(0.05, 0.05))) +
+                        scale_x_continuous(limits = c(x.min, x.max))
         
         plt <- plt + scale_y_continuous(limits = c(y.min, y.max),
-                                        expand = c(0, 0)) +
-                 scale_x_continuous(limits = c(x.min, x.max),
-                                    expand = c(0, 0))
+                                        expand = expand_scale(mult = c(0.05, 0.05))) +
+                 scale_x_continuous(limits = c(x.min, x.max))
         
         plots[[j]] <- cbind(ggplotGrob(plots[[j]]), ggplotGrob(plt), size = "last")
       }
@@ -1024,14 +1049,12 @@ shinyServer(function(input, output) {
         y.max <- max(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
         
         plots[[j]] <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                       expand = c(0, 0)) +
-                        scale_x_continuous(limits = c(x.min, x.max),
-                                           expand = c(0, 0))
+                                                       expand = expand_scale(mult = c(0.05, 0.05))) +
+                        scale_x_continuous(limits = c(x.min, x.max))
         
         plt <- plt + scale_y_continuous(limits = c(y.min, y.max),
-                                        expand = c(0, 0)) +
-                 scale_x_continuous(limits = c(x.min, x.max),
-                                    expand = c(0, 0))
+                                        expand = expand_scale(mult = c(0.05, 0.05))) +
+                 scale_x_continuous(limits = c(x.min, x.max))
         
         plots[[j]] <- cbind(ggplotGrob(plots[[j]]), ggplotGrob(plt), size = "last")
       }
@@ -1068,11 +1091,11 @@ shinyServer(function(input, output) {
         y.max <- max(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                       expand = c(0, 0)) +
+                                                       expand = expand_scale(mult = c(0.01, 0.05))) +
                         scale_x_continuous(limits = c(x.min, x.max))
         
         plt <- plt + scale_y_continuous(limits = c(y.min, y.max),
-                                        expand = c(0, 0)) +
+                                        expand = expand_scale(mult = c(0.01, 0.05))) +
                  scale_x_continuous(limits = c(x.min, x.max))
         
         plots[[j]] <- cbind(ggplotGrob(plots[[j]]), ggplotGrob(plt), size = "last")
@@ -1121,12 +1144,12 @@ shinyServer(function(input, output) {
         y.max <- max(layer_scales(plots[[j]])$y$range$range, layer_scales(plt)$y$range$range)
         
         plots[[j]]  <- plots[[j]] + scale_y_continuous(limits = c(y.min, y.max),
-                                                       expand = c(0, 0))
+                                                       expand = expand_scale(mult = c(0.05, 0.05)))
                         # scale_x_continuous(limits = c(x.min, x.max),
                         #                               expand = c(0, 0))
         
         plt <- plt + scale_y_continuous(limits = c(y.min, y.max),
-                                        expand = c(0, 0))
+                                        expand = expand_scale(mult = c(0.05, 0.05)))
                         # scale_x_continuous(limits = c(x.min, x.max),
                         #                               expand = c(0, 0))
         
@@ -1257,7 +1280,7 @@ shinyServer(function(input, output) {
   # On button press, show next plot(s)
   observeEvent(input$linRegress.next.plot, {
     if (values$linRegress.num.plots > 0) {
-      if (values$num.fits == 2) {
+      if (values$linRegress.num.fits == 2) {
         values$linRegress.active.index <- values$linRegress.active.index %% values$linRegress.num.plots + 1
         values$linRegress.active.plot  <- values$linRegress.plots[[values$linRegress.active.index]]
         
@@ -1362,7 +1385,7 @@ shinyServer(function(input, output) {
   # On button press, move to previous plot(s)
   observeEvent(input$linRegress.prev.plot, {
     if (values$linRegress.num.plots > 0) {
-      if (values$num.fits == 2) {
+      if (values$linRegress.num.fits == 2) {
         values$linRegress.active.index <- values$linRegress.num.plots + (values$linRegress.active.index - 1) %% (-values$linRegress.num.plots)
         values$linRegress.active.plot  <- values$linRegress.plots[[values$linRegress.active.index]]
         
@@ -1475,24 +1498,320 @@ shinyServer(function(input, output) {
   })
   
   observeEvent(input$covariance.display, {
+    if (is.null(dim(values$dat))) {
+      output$covariance.results <- renderPrint({
+        cat("ERROR: No Data loaded")
+      })
+    } else if (is.null(input$covariance.variables)) {
+      output$covariance.results <- renderPrint({
+        cat("ERROR: Missing variables")
+      })
+    } 
     
-    if (input$covariance.method == "Classic") {
-      values$covariance.fit <- covClassic(values$dat.numeric[, input$covariance.variables])
-    } else if (input$covariance.method == "Robust") {
+    corr <- FALSE
+    
+    if (input$covariance.type == "corr") {
+      corr <- TRUE
+    }
+    
+    if (input$covariance.method == "classic") {
+      values$covariance.fit <- covClassic(values$dat.numeric[, input$covariance.variables],
+                                          data.name = input$dataset,
+                                          corr = corr)
+    } else if (input$covariance.method == "rob") {
       if (input$covariance.estimator == "MM") {
-        
+        values$covariance.fit <- covRobMM.temp(values$dat.numeric[, input$covariance.variables],
+                                               data.name = input$dataset,
+                                               corr = corr)
       } else if (input$covariance.estimator == "Rocke") {
-        
+        values$covariance.fit <- covRobRocke.temp(values$dat.numeric[, input$covariance.variables],
+                                                  data.name = input$dataset,
+                                                  corr = corr)
       } else {
-        values$covariance.fit <- covRob(values$dat.numeric)
+        values$covariance.fit <- covRob(values$dat.numeric,
+                                        data.name = input$dataset,
+                                        corr = corr)
       }
     } else {
-      values$covariance.fit <- fit.models(c("covClassic", "covRob"), data = values$dat.numeric[, input$covariance.variables])
+      if (input$covariance.estimator == "MM") {
+        values$covariance.fit <- fit.models(c(Classic = "covClassic", Robust = "covRobMM"),
+                                            data = values$dat.numeric[, input$covariance.variables],
+                                            data.name = input$dataset,
+                                            corr = corr)
+      } else if (input$covariance.estimator == "Rocke") {
+        values$covariance.fit <- fit.models(c(Classic = "covClassic", Robust = "covRobRocke"),
+                                            data = values$dat.numeric[, input$covariance.variables],
+                                            data.name = input$dataset,
+                                            corr = corr)
+      } else {
+        values$covariance.fit <- fit.models(c(Classic = "covClassic", Robust = "covRob"),
+                                            data = values$dat.numeric[, input$covariance.variables],
+                                            data.name = input$dataset,
+                                            corr = corr)
+      }
     }
     
     output$covariance.results <- renderPrint({
       print(summary(values$covariance.fit))
     })
+  })
+  
+  observeEvent(input$covariance.display.plots, {
+    values$covariance.plots.active <- TRUE
+    
+    i <- 0
+    if (input$covariance.method == "Both") {
+      fm <- values$covariance.fit
+      
+      if (input$covariance.eigen == T) {
+        i <- i + 1
+        
+        eigen.vec1 <- eigen(fm[[1]]$cov)
+        eigen.vec2 <- eigen(fm[[2]]$cov)
+      }
+      
+      if (input$covariance.mahalanobis == T) {
+        
+      }
+      
+      if (input$covariance.ellipses.matrix == T) {
+        
+      }
+      
+      if (input$covariance.image.display == T) {
+        
+      }
+      
+      if (input$covariance.dist.dist == T) {
+        
+      }
+      
+      
+    } else {
+      if (input$covariance.eigen == T) {
+        
+      }
+      
+      if (input$covariance.mahalanobis == T) {
+        
+      }
+      
+      if (input$covariance.ellipses.matrix == T) {
+        
+      }
+      
+      if (input$covariance.image.display == T) {
+        
+      }
+    }
+  })
+  
+  observeEvent(input$covariance.next.plot, {
+    if (values$covariance.num.plots > 0) {
+      if (input$covariance.method == "Both") {
+        values$covariance.active.index <- values$covariance.active.index %% values$covariance.num.plots + 1
+        values$covariance.active.plot  <- values$covariance.plots[[values$covariance.active.index]]
+        
+        output$covariance.plot.ui <- renderUI({
+          if (values$covariance.active.index == values$covariance.num.plots) {
+            fluidPage(
+              wellPanel(
+                plotOutput("covariance.plot.output")
+              ),
+              
+              fluidRow(
+                column(1,
+                       offset = 1,
+                       actionButton("covariance.prev.plot",
+                                    "",
+                                    icon = icon("angle-left", "fa-2x"))
+                )
+              )
+            )
+          } else {
+            fluidPage(
+              wellPanel(
+                plotOutput("covariance.plot.output")
+              ),
+              
+              fluidRow(
+                column(1,
+                       offset = 1,
+                       actionButton("covariance.prev.plot",
+                                    "",
+                                    icon = icon("angle-left", "fa-2x"))
+                ),
+                
+                column(1,
+                       offset = 8,
+                       actionButton("covariance.next.plot",
+                                    "",
+                                    icon = icon("angle-right", "fa-2x"))
+                )
+              )
+            )
+          }
+        })
+        
+        output$covariance.plot.output <- renderPlot({
+          grid.draw(values$covariance.active.plot)
+        })
+      } else {
+        
+        values$covariance.active.index <- values$covariance.active.index %% values$covariance.num.plots + 1
+      
+        values$covariance.active.plot <- values$covariance.plots[[values$covariance.active.index]]
+        
+        output$covariance.plot.ui <- renderUI({
+          if (values$covariance.active.index == values$covariance.num.plots) {
+            fluidPage(
+              wellPanel(
+                plotOutput("covariance.plot.output")
+              ),
+            
+              fluidRow(
+                column(1,
+                       offset = 1,
+                       actionButton("covariance.prev.plot",
+                                    "",
+                                    icon = icon("angle-left", "fa-2x"))
+                )
+              )
+            )
+          } else {
+            fluidPage(
+              wellPanel(
+                plotOutput("covariance.plot.output")
+              ),
+            
+              fluidRow(
+                column(1,
+                       offset = 1,
+                       actionButton("covariance.prev.plot",
+                                    "",
+                                    icon = icon("angle-left", "fa-2x"))
+                ),
+                
+                column(1,
+                       offset = 8,
+                       actionButton("covariance.next.plot",
+                                    "",
+                                    icon = icon("angle-right", "fa-2x"))
+                )
+              )
+            )
+          }
+        })
+      
+        output$covariance.plot.output <- renderPlot({
+          values$covariance.active.plot
+        })
+      }
+    }
+  })
+  
+  # On button press, move to previous plot(s)
+  observeEvent(input$covariance.prev.plot, {
+    if (values$covariance.num.plots > 0) {
+      if (input$covariance.method == "Both") {
+        values$covariance.active.index <- values$covariance.num.plots + (values$covariance.active.index - 1) %% (-values$covariance.num.plots)
+        values$covariance.active.plot  <- values$covariance.plots[[values$covariance.active.index]]
+        
+        output$covariance.plot.ui <- renderUI({
+          if (values$covariance.active.index == 1) {
+            fluidPage(
+              wellPanel(
+                plotOutput("covariance.plot.output")
+              ),
+              
+              fluidRow(
+                column(1,
+                       offset = 10,
+                       actionButton("covariance.next.plot",
+                                    "",
+                                    icon = icon("angle-right", "fa-2x"))
+                )
+              )
+            )
+          } else {
+            fluidPage(
+              wellPanel(
+                plotOutput("covariance.plot.output")
+              ),
+              
+              fluidRow(
+                column(1,
+                       offset = 1,
+                       actionButton("covariance.prev.plot",
+                                    "",
+                                    icon = icon("angle-left", "fa-2x"))
+                ),
+                
+                column(1,
+                       offset = 8,
+                       actionButton("covariance.next.plot",
+                                    "",
+                                    icon = icon("angle-right", "fa-2x"))
+                )
+              )
+            )
+          }
+        })
+        
+        output$covariance.plot.output <- renderPlot({
+          grid.draw(values$covariance.active.plot)
+        })
+      } else {
+        values$covariance.active.index <- values$covariance.num.plots + (values$covariance.active.index - 1) %% (-values$covariance.num.plots)
+      
+        values$covariance.active.plot <- values$covariance.plots[[values$covariance.active.index]]
+        
+        output$covariance.plot.ui <- renderUI({
+          if (values$covariance.active.index == 1) {
+            fluidPage(
+              wellPanel(
+                plotOutput("covariance.plot.output")
+              ),
+            
+              fluidRow(
+                column(1,
+                       offset = 10,
+                       actionButton("covariance.next.plot",
+                                    "",
+                                    icon = icon("angle-right", "fa-2x"))
+                )
+              )
+            )
+          } else {
+            fluidPage(
+              wellPanel(
+                plotOutput("covariance.plot.output")
+              ),
+            
+              fluidRow(
+                column(1,
+                       offset = 1,
+                       actionButton("covariance.prev.plot",
+                                    "",
+                                    icon = icon("angle-left", "fa-2x"))
+                ),
+                
+                column(1,
+                       offset = 8,
+                       actionButton("covariance.next.plot",
+                                    "",
+                                    icon = icon("angle-right", "fa-2x"))
+                )
+              )
+            )
+          }
+        })
+      
+        output$covariance.plot.output <- renderPlot({
+          values$covariance.active.plot
+        })
+      }
+    }
   })
   
   output$pca.select.variables <- renderUI({
@@ -1501,7 +1820,7 @@ shinyServer(function(input, output) {
     }
     
     selectInput("pca.variables", "variables",
-                choices = values$dat.numeric.variables,
+                choices  = values$dat.numeric.variables,
                 selected = values$dat.numeric.variables,
                 multiple = TRUE)
   })

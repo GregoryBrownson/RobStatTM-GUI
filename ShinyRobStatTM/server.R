@@ -112,6 +112,7 @@ shinyServer(function(input, output) {
   
   values$regress.active <- F
   values$linRegress.plots.active <- F
+  values$covariance.plots.active <- F
   
 ####################  
 ## Data Selection ##
@@ -149,8 +150,6 @@ shinyServer(function(input, output) {
         )
       )
     })
-    
-    output$data.info <- 
     
     output$contents.table <- DT::renderDataTable({
       contents_table()
@@ -193,10 +192,6 @@ shinyServer(function(input, output) {
     values$dat.numeric.variables <- colnames(values$dat.numeric)
     
     return (as.data.frame(values$dat))
-  })
-  
-  observeEvent(input$more.info, {
-    
   })
   
   
@@ -1162,6 +1157,8 @@ shinyServer(function(input, output) {
         
         names <- colnames(mat)
         
+        LR.names <- ifelse(values$linRegress.models == "LS", values$linRegress.models, paste("Robust", values$linRegress.models))
+        
         colnames(mat) <- c("Y", "X")
         
         int1 <- fit$coefficients[1]
@@ -1170,17 +1167,18 @@ shinyServer(function(input, output) {
         slope1 <- fit$coefficients[2]
         slope2 <- fit2$coefficients[2]
         
+        line.dat <- data.frame(slope = c(slope1, slope2), int = c(int1, int2), method = LR.names)
+        
         title.name <- input$linRegress.formula.text
         
-        plt <- ggplot(data = mat, aes(x = X, y = Y)) +
+        plt <- ggplot() +
                  ggtitle(title.name) +
                  xlab(names[2]) +
                  ylab(names[1]) +
-                 geom_point() +
-                 geom_abline(aes(slope = slope1, intercept = int1, color = "black")) +
-                 geom_abline(aes(slope = slope2, intercept = int2, color = "blue")) +
-                 scale_color_manual("Method",
-                                    values = c("black", "blue"))
+                 geom_point(data = mat, aes(x = X, y = Y)) +
+                 geom_abline(data = line.dat, aes(slope = slope, intercept = int, linetype = method, color = method), size = 1, show.legend = T) +
+                 scale_color_manual(values = c("red", "black")) +
+                 scale_linetype_manual(values = c("dashed", "solid"))
         
         plots[[j]] <- ggplotGrob(plt)
       }
@@ -1197,7 +1195,7 @@ shinyServer(function(input, output) {
         values$linRegress.active.index <- 1
         values$linRegress.active.plot  <- plots[[1]]
         
-        if (i > 1) {
+        if (j > 1) {
           output$linRegress.plot.ui <- renderUI({
             fluidPage(
               wellPanel(
@@ -1560,22 +1558,277 @@ shinyServer(function(input, output) {
     values$covariance.plots.active <- TRUE
     
     i <- 0
-    if (input$covariance.method == "Both") {
+    
+    plots <- vector(mode = "list")
+    
+    if (input$covariance.method == "both") {
       fm <- values$covariance.fit
       
       if (input$covariance.eigen == T) {
         i <- i + 1
         
-        eigen.vec1 <- eigen(fm[[1]]$cov)
-        eigen.vec2 <- eigen(fm[[2]]$cov)
+        eigen.vals <- c(eigen(fm[[1]]$cov)$values, eigen(fm[[2]]$cov)$values)
+        
+        n <- length(eigen.vals) / 2
+        
+        indx <- rep(as.integer(1:n), 2)
+        
+        type <- c(rep("Classic", n), rep("Robust", n))
+        
+        dat <- data.frame(indx, eigen.vals, type)
+        
+        plt <- ggplot(data = dat) +
+                 ggtitle("Eigenvalues") +
+                 ylab("Eigenvalue") +
+                 geom_line(aes(x = indx, y = eigen.vals, color = type), size = 1) +
+                 geom_point(aes(x = indx, y = eigen.vals, color = type), shape = 5, size = 1) +
+                 scale_color_manual("Method", values = c("blue", "green")) +
+                 scale_x_continuous(name = "Factor Number", breaks = min(dat$indx):max(dat$indx))
+       
+        plots[[i]] <- ggplotGrob(plt)          
       }
       
       if (input$covariance.mahalanobis == T) {
+        i <- i + 1
         
+        md <- lapply(values$covariance.fit,
+                     function(x, mat) {
+                       sqrt(mahalanobis(mat, x$center, x$cov))
+                     },
+                     values$dat.numeric[, input$covariance.variables])
+        
+        N <- sapply(md, length)
+        p <- sapply(values$covariance.fit, function(x) nrow(x$cov))
+        
+        thresh <- sqrt(qchisq(0.95, df = p))
+        
+        indx <- lapply(N, function(n) 1:n)
+        
+        dat = data.frame(indx = indx[[1]], MD = md[[1]])
+        
+        p1 <- ggplot(data = dat, aes(x = indx, y = MD)) +
+                ggtitle("Classic") +
+                xlab("Index") +
+                ylab("Mahalanobis Distance") +
+                geom_point(color = "dodgerblue2", shape = 18) +
+                geom_hline(yintercept = thresh[1], linetype = 2)
+        
+        dat = data.frame(indx = indx[[2]], MD = md[[2]])
+        
+        p2 <- ggplot(data = dat, aes(x = indx, y = MD)) +
+                ggtitle("Robust") +
+                xlab("Index") +
+                ylab("Mahalanobis Distance") +
+                geom_point(color = "dodgerblue2", shape = 18) +
+                geom_hline(yintercept = thresh[2], linetype = 2)
+        
+        y.min <- min(layer_scales(p1)$y$range$range, layer_scales(p2)$y$range$range)
+        y.max <- max(layer_scales(p1)$y$range$range, layer_scales(p2)$y$range$range)
+        
+        p1 <- p1 + scale_y_continuous(limits = c(y.min, y.max),
+                                      expand = expand_scale(mult = c(0.05, 0.05)))
+        
+        p2 <- p2 + scale_y_continuous(limits = c(y.min, y.max),
+                                      expand = expand_scale(mult = c(0.05, 0.05)))
+        
+        plots[[i]] <- cbind(ggplotGrob(p1), ggplotGrob(p2), size = "last")
       }
       
       if (input$covariance.ellipses.matrix == T) {
+        i <- i + 1
         
+        ellipse <- function(loc, A) {
+          detA <- A[1, 1] * A[2, 2] - A[1, 2]^2
+          dist <- sqrt(qchisq(0.95, 2))
+          ylimit <- sqrt(A[2, 2]) * dist
+          y <- seq(-ylimit, ylimit, 0.01 * ylimit)
+          sqrt.discr <- detA/A[2,2]^2 * (A[2,2] * dist^2 - y^2)
+          sqrt.discr[c(1, length(sqrt.discr))] <- 0.0
+          sqrt.discr <- sqrt(sqrt.discr)
+          b <- loc[1] + A[1, 2] / A[2, 2] * y
+          x1 <- b - sqrt.discr
+          x2 <- b + sqrt.discr
+          y <- loc[2] + y
+          rbind(cbind(x1, y), cbind(rev(x2), rev(y)))
+        }
+        
+        data <- wine[, 1:4]
+        
+        fit  <- robust::covClassic(data)
+        
+        fit2 <- robust::covRob(data)
+        
+        grid <- expand.grid(x = 1:ncol(data), y = 1:ncol(data))
+        
+        # data.frame with xy coordinates
+        all <- lapply(1:nrow(grid),
+                      function(i) {
+                        xcol <- grid[i, "x"]
+                        ycol <- grid[i, "y"]
+                        data.frame(xvar = names(data)[ycol], yvar = names(data)[xcol],
+                                   i = grid[i, "x"], j = grid[i, "y"],
+                                   x = data[, xcol], y = data[, ycol])
+                      })
+        
+        all <- do.call("rbind", all)
+        
+        all.upper <- all
+        
+        all.upper[[6]][all.upper[[3]] <  all.upper[[4]]] <- "NA"
+        all.upper[[5]][all.upper[[3]] <= all.upper[[4]]] <- "NA"
+        
+        all.upper$x <- suppressWarnings(as.numeric(as.character(all.upper$x)))
+        all.upper$y <- suppressWarnings(as.numeric(as.character(all.upper$y)))
+        
+        all.upper$xvar <- factor(all.upper$xvar, levels = names(data))
+        all.upper$yvar <- factor(all.upper$yvar, levels = names(data))
+        
+        xy.mapping <- aes_string(x = "x", y = "y")
+        class(xy.mapping) <- "uneval"
+        
+        plt <- ggplot(all.upper, mapping = aes_string(x = "x", y = "y")) +
+                 theme(axis.text.x  = element_blank(), axis.text.y  = element_blank(),
+                       axis.ticks.x = element_blank(), axis.ticks.y = element_blank(),
+                       axis.title.x = element_blank(), axis.title.y = element_blank(),
+                       panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+                 facet_grid(xvar ~ yvar, scales = "free") +
+                 theme(aspect.ratio = 1)
+        
+        if (fit$corr == F) {
+          s <- sqrt(diag(fit$cov))
+          X <- fit$cov / (s %o% s) 
+        } else {
+          X <- fit$cov
+        }
+        
+        if (fit2$corr == F) {
+          s <- sqrt(diag(fit2$cov))
+          X2 <- fit2$cov / (s %o% s) 
+        } else {
+          X2 <- fit2$cov
+        }
+        
+        ellipse.pts <- lapply(1:nrow(grid),
+                       function(i) {
+                         row <- grid[i, "x"]
+                         col <- grid[i, "y"]
+                         if (row > col) {
+                           cov <- X[row, col]
+                           
+                           pts <- c(seq(0.0, 2*pi, length.out = 181), NA)
+                           xs <- cos(pts + acos(cov) / 2)
+                           ys <- cos(pts - acos(cov) / 2)
+                           
+                           cov2 <- X2[row, col]
+                           
+                           xs2 <- cos(pts + acos(cov2) / 2)
+                           ys2 <- cos(pts - acos(cov2) / 2)
+                           
+                           rbind(data.frame(xvar = names(data)[col], yvar = names(data)[row],
+                                            i = row, j = col,
+                                            x = xs,  y = ys,
+                                            type = "classic"),
+                                 data.frame(xvar = names(data)[col], yvar = names(data)[row],
+                                            i = row, j = col,
+                                            x = xs2,  y = ys2,
+                                            type = "robust"))
+                         } else {
+                           rbind(data.frame(xvar = names(data)[col], yvar = names(data)[row],
+                                            i = row, j = col,
+                                            x = as.numeric(NA), y = as.numeric(NA),
+                                            type = "classic"),
+                                 data.frame(xvar = names(data)[col], yvar = names(data)[row],
+                                            i = row, j = col,
+                                            x = as.numeric(NA), y = as.numeric(NA),
+                                            type = "robust"))
+                         }
+                       })
+        
+        ellipse.pts <- do.call("rbind", ellipse.pts)
+        
+        ellipse.pts$x <- suppressWarnings(as.numeric(as.character(ellipse.pts$x)))
+        ellipse.pts$y <- suppressWarnings(as.numeric(as.character(ellipse.pts$y)))
+        
+        ellipse.pts$xvar <- factor(ellipse.pts$xvar, levels = names(data))
+        ellipse.pts$yvar <- factor(ellipse.pts$yvar, levels = names(data))
+        
+        plt <- plt + geom_polygon(mapping = aes_string(x = "x", y = "y", color = "type", linetype = "type"),
+                                  data    = ellipse.pts, na.rm = T, fill = NA, show.legend = T)
+        
+        # Calculate each variable's kernel density 
+        densities <- with(all, simplify = FALSE, 
+                          tapply(x, yvar, stats::density, na.rm = TRUE))
+        densities <- lapply(densities, function(x) data.frame(x = x$x, y = x$y))
+        names(densities) <- levels(all$xvar)
+        
+        # Melt densities
+        densities <- reshape2::melt(densities, id.vars = c("x", "y"))
+        names(densities) <- c("x", "y", "xvar")
+        densities$xvar <- factor(densities$xvar, levels = levels(all$xvar))
+        densities$yvar <- factor(densities$xvar, levels = levels(all$xvar))
+        
+        # Scale each variable's density estimate to match range of the variable
+        densities$y.scaled <- NA
+        densities$x.scaled <- NA
+        for(v in levels(all$xvar)) {
+          var.vals <- densities$x[densities$xvar == v]
+          var.dens <- densities$y[densities$xvar == v]
+          
+          scaled.vals <- scales::rescale(var.vals, to = range(-1:1, na.rm = TRUE))
+          scaled.dens <- scales::rescale(var.dens, to = range(-1:1, na.rm = TRUE))
+          
+          densities$x.scaled[densities$xvar == v] <- scaled.vals
+          densities$y.scaled[densities$xvar == v] <- scaled.dens
+        }
+        
+        # Add density line to plot
+        plt <- plt + geom_line(data = densities, aes(x = x.scaled, y = y.scaled), color = "red3")
+        
+        corr.text <- lapply(1:nrow(grid),
+                            function(i) {
+                              row <- grid[i, "x"]
+                              col <- grid[i, "y"]
+                              if (row < col) {
+                                corr  <- X[row, col]
+                                corr2 <- X2[row, col]
+                               
+                                rbind(data.frame(xvar = names(data)[col], yvar = names(data)[row],
+                                                 lab = as.character(formatC(round( corr, 2 ), format='f', digits=2)),
+                                                 i = row, j = col,
+                                                 x = 0.0,  y = 0.25,
+                                                 type = "classic"),
+                                      data.frame(xvar = names(data)[col], yvar = names(data)[row],
+                                                 lab = as.character(formatC(round( corr2, 2 ), format='f', digits=2)),
+                                                 i = row, j = col,
+                                                 x = 0.0,  y = -0.25,
+                                                 type = "robust"))
+                              } else {
+                                rbind(data.frame(xvar = names(data)[col], yvar = names(data)[row],
+                                                 lab = as.character(NA),
+                                                 i = row, j = col,
+                                                 x = as.numeric(NA), y = as.numeric(NA),
+                                                 type = "classic"),
+                                      data.frame(xvar = names(data)[col], yvar = names(data)[row],
+                                                 lab = as.character(NA),
+                                                 i = row, j = col,
+                                                 x = as.numeric(NA), y = as.numeric(NA),
+                                                 type = "robust"))
+                              }
+                            })
+        
+        corr.text <- do.call("rbind", corr.text)
+        
+        corr.text$x <- suppressWarnings(as.numeric(as.character(corr.text$x)))
+        corr.text$y <- suppressWarnings(as.numeric(as.character(corr.text$y)))
+        
+        corr.text$xvar <- factor(corr.text$xvar, levels = names(data))
+        corr.text$yvar <- factor(corr.text$yvar, levels = names(data))
+        
+        plt <- plt + geom_text(data = corr.text, aes_string(x = "x", y = "y", label = "lab", color = "type"), na.rm = T, show.legend = F) +
+                 scale_color_manual(values = c("black", "red")) +
+                 scale_linetype_manual(values = c("solid", "dashed"))
+        
+        plots[[i]] <- ggplotGrob(plt)
       }
       
       if (input$covariance.image.display == T) {
@@ -1583,10 +1836,82 @@ shinyServer(function(input, output) {
       }
       
       if (input$covariance.dist.dist == T) {
+        i <- i + 1
         
+        md <- lapply(values$covariance.fit,
+                     function(x, mat) {
+                       sqrt(mahalanobis(mat, x$center, x$cov))
+                     },
+                     values$dat.numeric[, input$covariance.variables])
+        
+        dat <- data.frame(x = md[[1]], y = md[[2]])
+        
+        N <- sapply(md, length)
+        p <- sapply(values$covariance.fit, function(x) nrow(x$cov))
+        
+        thresh <- sqrt(qchisq(0.95, df = p))
+        
+        min.val <- min(dat)
+        max.val <- max(dat)
+        
+        plt <- ggplot(data = dat, aes(x = x, y = y)) +
+                 ggtitle("Distance-Distance Plot") +
+                 xlab("Robust Distance") +
+                 ylab("Classic Distance") +
+                 xlim(c(min.val, max.val)) +
+                 ylim(c(min.val, max.val)) +
+                 theme(aspect.ratio = 1) +
+                 geom_point(color = "dodgerblue2", shape = 18) +
+                 geom_hline(yintercept = thresh[1], linetype = 2) +
+                 geom_vline(xintercept = thresh[1], linetype = 2) +
+                 geom_abline(aes(slope = 1, intercept = 0), linetype = 2)
+        
+        plots[[i]] <- ggplotGrob(plt)
       }
       
-      
+      if (i == 0) {
+        output$covariance.plot.ui <- renderUI({
+          fluidPage(
+            fluidRow(verbatimTextOutput("no.selection"))
+          )
+        })
+      } else {
+        values$covariance.plots        <- plots
+        values$covariance.num.plots    <- i
+        values$covariance.active.index <- 1
+        values$covariance.active.plot  <- plots[[1]]
+        
+        if (i > 1) {
+          output$covariance.plot.ui <- renderUI({
+            fluidPage(
+              wellPanel(
+                plotOutput("covariance.plot.output")
+              ),
+              
+              fluidRow(
+                column(1,
+                       offset = 10,
+                       actionButton("covariance.next.plot",
+                                    "",
+                                    icon = icon("angle-right", "fa-2x"))
+                )
+              )
+            )
+          })
+        } else {
+          output$covariance.plot.ui <- renderUI({
+            fluidPage(
+              wellPanel(
+                plotOutput("covariance.plot.output")
+              )
+            )
+          })
+        }
+        
+        output$covariance.plot.output <- renderPlot({
+          grid.draw(values$covariance.active.plot)
+        })
+      }
     } else {
       if (input$covariance.eigen == T) {
         
@@ -1603,12 +1928,54 @@ shinyServer(function(input, output) {
       if (input$covariance.image.display == T) {
         
       }
+      
+      if (i == 0) {
+        output$covariance.plot.ui <- renderUI({
+          fluidPage(verbatimTextOutput("no.selection"))
+        })
+      } else {
+        values$covariance.plots        <- plots
+        values$covariance.num.plots    <- i
+        values$covariance.active.index <- 1
+        values$covariance.active.plot  <- plots[[1]]
+        
+        if (i > 1) {
+          output$covariance.plot.ui <- renderUI({
+            fluidPage(
+              wellPanel(
+                plotOutput("covariance.plot.output")
+              ),
+              
+              fluidRow(
+                column(1,
+                       offset = 10,
+                       actionButton("covariance.next.plot",
+                                    "",
+                                    icon = icon("angle-right", "fa-2x"))
+                )
+              )
+            )
+          })
+        } else {
+          output$covariance.plot.ui <- renderUI({
+            fluidPage(
+              wellPanel(
+                plotOutput("covariance.plot.output")
+              )
+            )
+          })
+        }
+        
+        output$covariance.plot.output <- renderPlot({
+          values$covariance.active.plot
+        })
+      }
     }
   })
   
   observeEvent(input$covariance.next.plot, {
     if (values$covariance.num.plots > 0) {
-      if (input$covariance.method == "Both") {
+      if (input$covariance.method == "both") {
         values$covariance.active.index <- values$covariance.active.index %% values$covariance.num.plots + 1
         values$covariance.active.plot  <- values$covariance.plots[[values$covariance.active.index]]
         
@@ -1713,7 +2080,7 @@ shinyServer(function(input, output) {
   # On button press, move to previous plot(s)
   observeEvent(input$covariance.prev.plot, {
     if (values$covariance.num.plots > 0) {
-      if (input$covariance.method == "Both") {
+      if (input$covariance.method == "both") {
         values$covariance.active.index <- values$covariance.num.plots + (values$covariance.active.index - 1) %% (-values$covariance.num.plots)
         values$covariance.active.plot  <- values$covariance.plots[[values$covariance.active.index]]
         
@@ -1828,15 +2195,15 @@ shinyServer(function(input, output) {
   # Reset all windows once new data set is loaded
   observeEvent(input$display.table, {
     if (values$regress.active) {
-      output$linRegress.results <- renderPrint({ invisible() })
+      output$covariance.results <- renderPrint({ invisible() })
       
       values$regress.active <- F
     }
     
-    if (values$linRegress.plots.active) {
-      output$linRegress.plot.ui <- renderUI({ invisible() })
+    if (values$covariance.plots.active) {
+      output$covariance.plot.ui <- renderUI({ invisible() })
       
-      values$linRegress.plots.active <- F
+      values$covariance.plots.active <- F
     }
     
     updateTabsetPanel(session  = getDefaultReactiveDomain(), "linear.tabs",
@@ -1844,11 +2211,11 @@ shinyServer(function(input, output) {
   })
   
   # Reset plotting window for linear regression
-  observeEvent(input$linRegress.display, {
-    if (values$linRegress.plots.active) {
-      output$linRegress.plot.ui <- renderUI({ invisible() })
+  observeEvent(input$covariance.display, {
+    if (values$covariance.plots.active) {
+      output$covariance.plot.ui <- renderUI({ invisible() })
       
-      values$linRegress.plots.active <- F
+      values$covariance.plots.active <- F
     }
   })
 })

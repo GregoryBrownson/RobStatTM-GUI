@@ -281,7 +281,7 @@ shinyUI(navbarPage("RobStatTM",
                           choices = c("Covariances"  = "cov",
                                       "Correlations" = "corr")),
               
-              conditionalPanel("input['covariance.method'] != 'Classical'",
+              conditionalPanel("input['covariance.method'] != 'classic'",
                 selectInput("covariance.estimator", "Robust Covariance Estimator",
                             choices = c("Auto", "MM", "Rocke"))
               ),
@@ -307,9 +307,14 @@ shinyUI(navbarPage("RobStatTM",
               checkboxInput("covariance.eigen", "Eigenvalues", TRUE),
               checkboxInput("covariance.mahalanobis", "Mahalanobis Distances", TRUE),
               checkboxInput("covariance.ellipses.matrix", "Ellipses Matrix", TRUE),
-              checkboxInput("covariance.image.display", "Image Display", TRUE),
+              
               conditionalPanel(
-                condition = "input['covariance.method'] == 'Both'",
+                condition = "input['covariance.method'] == 'both'",
+                checkboxInput("covariance.image.display", "Image Display", TRUE)
+              ),
+              
+              conditionalPanel(
+                condition = "input['covariance.method'] == 'both'",
                 checkboxInput("covariance.dist.dist", "Distance-Distance Plot", TRUE)
               ),
               

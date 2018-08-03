@@ -14,6 +14,7 @@ library(grid)
 library(gridExtra)
 library(PerformanceAnalytics)
 library(RobStatTM)
+library(robust)
 library(robustbase)
 library(shiny)
 library(xts)
@@ -110,7 +111,8 @@ shinyServer(function(input, output) {
   # Need this to store reactive objects
   values <- reactiveValues()
   
-  values$regress.active <- F
+  values$linRegress.active <- F
+  values$covariance.active <- F
   values$linRegress.plots.active <- F
   values$covariance.plots.active <- F
   
@@ -553,7 +555,7 @@ shinyServer(function(input, output) {
       fm <- fit.models(fit[[1]])
     }
 
-    values$regress.active <- T
+    values$linRegress.active <- T
     
     if (input$linRegress.second.method) {
       if (input$linRegress.fit.option == input$linRegress.fit.option2) {
@@ -1549,6 +1551,7 @@ shinyServer(function(input, output) {
       }
     }
     
+    # Print summary method for covariance results
     output$covariance.results <- renderPrint({
       print(summary(values$covariance.fit))
     })
@@ -1585,7 +1588,7 @@ shinyServer(function(input, output) {
                  scale_color_manual("Method", values = c("blue", "green")) +
                  scale_x_continuous(name = "Factor Number", breaks = min(dat$indx):max(dat$indx))
        
-        plots[[i]] <- ggplotGrob(plt)          
+        plots[[i]] <- ggplotGrob(plt)
       }
       
       if (input$covariance.mahalanobis == T) {
@@ -1637,6 +1640,7 @@ shinyServer(function(input, output) {
       if (input$covariance.ellipses.matrix == T) {
         i <- i + 1
         
+        # Function to create ellipses taken from 'robust' package
         ellipse <- function(loc, A) {
           detA <- A[1, 1] * A[2, 2] - A[1, 2]^2
           dist <- sqrt(qchisq(0.95, 2))
@@ -1652,13 +1656,15 @@ shinyServer(function(input, output) {
           rbind(cbind(x1, y), cbind(rev(x2), rev(y)))
         }
         
-        data <- wine[, 1:4]
+        data <- values$dat[, input$covariance.variables]
         
-        fit  <- robust::covClassic(data)
+        fit  <- values$covariance.fit[[1]]
         
-        fit2 <- robust::covRob(data)
+        fit2 <- values$covariance.fit[[2]]
         
         grid <- expand.grid(x = 1:ncol(data), y = 1:ncol(data))
+        
+        text.size <- ifelse(ncol(data) > 4, 4, 10)
         
         # data.frame with xy coordinates
         all <- lapply(1:nrow(grid),
@@ -1824,7 +1830,8 @@ shinyServer(function(input, output) {
         corr.text$xvar <- factor(corr.text$xvar, levels = names(data))
         corr.text$yvar <- factor(corr.text$yvar, levels = names(data))
         
-        plt <- plt + geom_text(data = corr.text, aes_string(x = "x", y = "y", label = "lab", color = "type"), na.rm = T, show.legend = F) +
+        plt <- plt + geom_text(data = corr.text, aes_string(x = "x", y = "y", label = "lab", color = "type"),
+                               size = text.size, na.rm = T, show.legend = F, check_overlap = TRUE) +
                  scale_color_manual(values = c("black", "red")) +
                  scale_linetype_manual(values = c("solid", "dashed"))
         
@@ -1868,316 +1875,369 @@ shinyServer(function(input, output) {
         
         plots[[i]] <- ggplotGrob(plt)
       }
-      
-      if (i == 0) {
-        output$covariance.plot.ui <- renderUI({
-          fluidPage(
-            fluidRow(verbatimTextOutput("no.selection"))
-          )
-        })
-      } else {
-        values$covariance.plots        <- plots
-        values$covariance.num.plots    <- i
-        values$covariance.active.index <- 1
-        values$covariance.active.plot  <- plots[[1]]
-        
-        if (i > 1) {
-          output$covariance.plot.ui <- renderUI({
-            fluidPage(
-              wellPanel(
-                plotOutput("covariance.plot.output")
-              ),
-              
-              fluidRow(
-                column(1,
-                       offset = 10,
-                       actionButton("covariance.next.plot",
-                                    "",
-                                    icon = icon("angle-right", "fa-2x"))
-                )
-              )
-            )
-          })
-        } else {
-          output$covariance.plot.ui <- renderUI({
-            fluidPage(
-              wellPanel(
-                plotOutput("covariance.plot.output")
-              )
-            )
-          })
-        }
-        
-        output$covariance.plot.output <- renderPlot({
-          grid.draw(values$covariance.active.plot)
-        })
-      }
     } else {
+      fit <- values$covariance.fit
+      
+      # Scree plot for covariance
       if (input$covariance.eigen == T) {
+        i <- i + 1
         
+        eigen.vals <- eigen(fit$cov)$values
+        
+        n <- length(eigen.vals)
+        
+        indx <- 1:n
+        
+        dat <- data.frame(indx, eigen.vals)
+        
+        plt <- ggplot(data = dat) +
+                 ggtitle("Eigenvalues") +
+                 ylab("Eigenvalue") +
+                 geom_line(aes(x = indx, y = eigen.vals), color = "dodgerblue2", size = 1) +
+                 geom_point(aes(x = indx, y = eigen.vals), color = "dodgerblue2", shape = 5, size = 1) +
+                 scale_x_continuous(name = "Factor Number", breaks = min(dat$indx):max(dat$indx))
+       
+        plots[[i]] <- ggplotGrob(plt)
       }
       
       if (input$covariance.mahalanobis == T) {
+        i <- i + 1
         
+        md <- sqrt(mahalanobis(values$dat.numeric[, input$covariance.variables],
+                               fit$center, fit$cov))
+        
+        n <- length(md)
+        p <- nrow(fit$cov)
+        
+        thresh <- sqrt(qchisq(0.95, df = p))
+        
+        indx <- 1:n
+        
+        if (class(fit) == "covClassic") {
+          title.name = "Classic Distance"
+        } else {
+          title.name = "Robust Distance"
+        }
+        
+        dat = data.frame(indx = indx, MD = md)
+        
+        plt <- ggplot(data = dat, aes(x = indx, y = MD)) +
+                 ggtitle(title.name) +
+                 xlab("Index") +
+                 ylab("Mahalanobis Distance") +
+                 geom_point(color = "dodgerblue2", shape = 18) +
+                 geom_hline(yintercept = thresh[1], linetype = 2)
+        
+        plots[[i]] <- ggplotGrob(plt)
       }
       
       if (input$covariance.ellipses.matrix == T) {
+        i <- i + 1
         
-      }
-      
-      if (input$covariance.image.display == T) {
-        
-      }
-      
-      if (i == 0) {
-        output$covariance.plot.ui <- renderUI({
-          fluidPage(verbatimTextOutput("no.selection"))
-        })
-      } else {
-        values$covariance.plots        <- plots
-        values$covariance.num.plots    <- i
-        values$covariance.active.index <- 1
-        values$covariance.active.plot  <- plots[[1]]
-        
-        if (i > 1) {
-          output$covariance.plot.ui <- renderUI({
-            fluidPage(
-              wellPanel(
-                plotOutput("covariance.plot.output")
-              ),
-              
-              fluidRow(
-                column(1,
-                       offset = 10,
-                       actionButton("covariance.next.plot",
-                                    "",
-                                    icon = icon("angle-right", "fa-2x"))
-                )
-              )
-            )
-          })
-        } else {
-          output$covariance.plot.ui <- renderUI({
-            fluidPage(
-              wellPanel(
-                plotOutput("covariance.plot.output")
-              )
-            )
-          })
+        ellipse <- function(loc, A) {
+          detA <- A[1, 1] * A[2, 2] - A[1, 2]^2
+          dist <- sqrt(qchisq(0.95, 2))
+          ylimit <- sqrt(A[2, 2]) * dist
+          y <- seq(-ylimit, ylimit, 0.01 * ylimit)
+          sqrt.discr <- detA/A[2,2]^2 * (A[2,2] * dist^2 - y^2)
+          sqrt.discr[c(1, length(sqrt.discr))] <- 0.0
+          sqrt.discr <- sqrt(sqrt.discr)
+          b <- loc[1] + A[1, 2] / A[2, 2] * y
+          x1 <- b - sqrt.discr
+          x2 <- b + sqrt.discr
+          y <- loc[2] + y
+          rbind(cbind(x1, y), cbind(rev(x2), rev(y)))
         }
         
-        output$covariance.plot.output <- renderPlot({
-          values$covariance.active.plot
+        data <- values$dat[, input$covariance.variables]
+        
+        grid <- expand.grid(x = 1:ncol(data), y = 1:ncol(data))
+        
+        text.size <- ifelse(ncol(data) > 2, 4, 10)
+        
+        # data.frame with xy coordinates
+        all <- lapply(1:nrow(grid),
+                      function(i) {
+                        xcol <- grid[i, "x"]
+                        ycol <- grid[i, "y"]
+                        data.frame(xvar = names(data)[ycol], yvar = names(data)[xcol],
+                                   i = grid[i, "x"], j = grid[i, "y"],
+                                   x = data[, xcol], y = data[, ycol])
+                      })
+        
+        all <- do.call("rbind", all)
+        
+        all.upper <- all
+        
+        all.upper[[6]][all.upper[[3]] <  all.upper[[4]]] <- "NA"
+        all.upper[[5]][all.upper[[3]] <= all.upper[[4]]] <- "NA"
+        
+        all.upper$x <- suppressWarnings(as.numeric(as.character(all.upper$x)))
+        all.upper$y <- suppressWarnings(as.numeric(as.character(all.upper$y)))
+        
+        all.upper$xvar <- factor(all.upper$xvar, levels = names(data))
+        all.upper$yvar <- factor(all.upper$yvar, levels = names(data))
+        
+        xy.mapping <- aes_string(x = "x", y = "y")
+        class(xy.mapping) <- "uneval"
+        
+        plt <- ggplot(all.upper, mapping = aes_string(x = "x", y = "y")) +
+                 theme(axis.text.x  = element_blank(), axis.text.y  = element_blank(),
+                       axis.ticks.x = element_blank(), axis.ticks.y = element_blank(),
+                       axis.title.x = element_blank(), axis.title.y = element_blank(),
+                       panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+                 facet_grid(xvar ~ yvar, scales = "free") +
+                 theme(aspect.ratio = 1)
+        
+        if (fit$corr == F) {
+          s <- sqrt(diag(fit$cov))
+          X <- fit$cov / (s %o% s) 
+        } else {
+          X <- fit$cov
+        }
+        
+        ellipse.pts <- lapply(1:nrow(grid),
+                       function(i) {
+                         row <- grid[i, "x"]
+                         col <- grid[i, "y"]
+                         if (row > col) {
+                           cov <- X[row, col]
+                           
+                           pts <- c(seq(0.0, 2*pi, length.out = 181), NA)
+                           xs <- cos(pts + acos(cov) / 2)
+                           ys <- cos(pts - acos(cov) / 2)
+                           
+                           data.frame(xvar = names(data)[col], yvar = names(data)[row],
+                                      i = row, j = col,
+                                      x = xs,  y = ys)
+                         } else {
+                           data.frame(xvar = names(data)[col], yvar = names(data)[row],
+                                      i = row, j = col,
+                                      x = as.numeric(NA), y = as.numeric(NA))
+                         }
+                       })
+        
+        ellipse.pts <- do.call("rbind", ellipse.pts)
+        
+        ellipse.pts$x <- suppressWarnings(as.numeric(as.character(ellipse.pts$x)))
+        ellipse.pts$y <- suppressWarnings(as.numeric(as.character(ellipse.pts$y)))
+        
+        ellipse.pts$xvar <- factor(ellipse.pts$xvar, levels = names(data))
+        ellipse.pts$yvar <- factor(ellipse.pts$yvar, levels = names(data))
+        
+        plt <- plt + geom_polygon(mapping = aes_string(x = "x", y = "y"), color = "black",
+                                  data    = ellipse.pts, na.rm = T, fill = NA, show.legend = T)
+        
+        # Calculate each variable's kernel density 
+        densities <- with(all, simplify = FALSE, 
+                          tapply(x, yvar, stats::density, na.rm = TRUE))
+        densities <- lapply(densities, function(x) data.frame(x = x$x, y = x$y))
+        names(densities) <- levels(all$xvar)
+        
+        # Melt densities
+        densities <- reshape2::melt(densities, id.vars = c("x", "y"))
+        names(densities) <- c("x", "y", "xvar")
+        densities$xvar <- factor(densities$xvar, levels = levels(all$xvar))
+        densities$yvar <- factor(densities$xvar, levels = levels(all$xvar))
+        
+        # Scale each variable's density estimate to match range of the variable
+        densities$y.scaled <- NA
+        densities$x.scaled <- NA
+        for(v in levels(all$xvar)) {
+          var.vals <- densities$x[densities$xvar == v]
+          var.dens <- densities$y[densities$xvar == v]
+          
+          scaled.vals <- scales::rescale(var.vals, to = range(-1:1, na.rm = TRUE))
+          scaled.dens <- scales::rescale(var.dens, to = range(-1:1, na.rm = TRUE))
+          
+          densities$x.scaled[densities$xvar == v] <- scaled.vals
+          densities$y.scaled[densities$xvar == v] <- scaled.dens
+        }
+        
+        # Add density line to plot
+        plt <- plt + geom_line(data = densities, aes(x = x.scaled, y = y.scaled), color = "red3")
+        
+        corr.text <- lapply(1:nrow(grid),
+                            function(i) {
+                              row <- grid[i, "x"]
+                              col <- grid[i, "y"]
+                              if (row < col) {
+                                corr  <- X[row, col]
+                               
+                                data.frame(xvar = names(data)[col], yvar = names(data)[row],
+                                           lab = as.character(formatC(round( corr, 2 ), format='f', digits=2)),
+                                           i = row, j = col,
+                                           x = 0.0,  y = -0.25)
+                              } else {
+                                data.frame(xvar = names(data)[col], yvar = names(data)[row],
+                                           lab = as.character(NA),
+                                           i = row, j = col,
+                                           x = as.numeric(NA), y = as.numeric(NA))
+                              }
+                            })
+        
+        corr.text <- do.call("rbind", corr.text)
+        
+        corr.text$x <- suppressWarnings(as.numeric(as.character(corr.text$x)))
+        corr.text$y <- suppressWarnings(as.numeric(as.character(corr.text$y)))
+        
+        corr.text$xvar <- factor(corr.text$xvar, levels = names(data))
+        corr.text$yvar <- factor(corr.text$yvar, levels = names(data))
+        
+        plt <- plt + geom_text(data = corr.text, aes_string(x = "x", y = "y", label = "lab"),
+                               size = text.size, na.rm = TRUE, check_overlap = TRUE)
+        
+        plots[[i]] <- ggplotGrob(plt)
+      }
+    }
+    
+    if (i == 0) {
+      output$covariance.plot.ui <- renderUI({
+        fluidPage(
+          fluidRow(verbatimTextOutput("no.selection"))
+        )
+      })
+    } else {
+      values$covariance.plots        <- plots
+      values$covariance.num.plots    <- i
+      values$covariance.active.index <- 1
+      values$covariance.active.plot  <- plots[[1]]
+      
+      if (i > 1) {
+        output$covariance.plot.ui <- renderUI({
+          fluidPage(
+            wellPanel(
+              plotOutput("covariance.plot.output")
+            ),
+            
+            fluidRow(
+              column(1,
+                     offset = 10,
+                     actionButton("covariance.next.plot",
+                                  "",
+                                  icon = icon("angle-right", "fa-2x"))
+              )
+            )
+          )
+        })
+      } else {
+        output$covariance.plot.ui <- renderUI({
+          fluidPage(
+            wellPanel(
+              plotOutput("covariance.plot.output")
+            )
+          )
         })
       }
+      
+      output$covariance.plot.output <- renderPlot({
+        grid.draw(values$covariance.active.plot)
+      })
     }
   })
   
   observeEvent(input$covariance.next.plot, {
     if (values$covariance.num.plots > 0) {
-      if (input$covariance.method == "both") {
-        values$covariance.active.index <- values$covariance.active.index %% values$covariance.num.plots + 1
-        values$covariance.active.plot  <- values$covariance.plots[[values$covariance.active.index]]
-        
-        output$covariance.plot.ui <- renderUI({
-          if (values$covariance.active.index == values$covariance.num.plots) {
-            fluidPage(
-              wellPanel(
-                plotOutput("covariance.plot.output")
+      values$covariance.active.index <- values$covariance.active.index %% values$covariance.num.plots + 1
+      values$covariance.active.plot  <- values$covariance.plots[[values$covariance.active.index]]
+      
+      output$covariance.plot.ui <- renderUI({
+        if (values$covariance.active.index == values$covariance.num.plots) {
+          fluidPage(
+            wellPanel(
+              plotOutput("covariance.plot.output")
+            ),
+            
+            fluidRow(
+              column(1,
+                     offset = 1,
+                     actionButton("covariance.prev.plot",
+                                  "",
+                                  icon = icon("angle-left", "fa-2x"))
+              )
+            )
+          )
+        } else {
+          fluidPage(
+            wellPanel(
+              plotOutput("covariance.plot.output")
+            ),
+            
+            fluidRow(
+              column(1,
+                     offset = 1,
+                     actionButton("covariance.prev.plot",
+                                  "",
+                                  icon = icon("angle-left", "fa-2x"))
               ),
               
-              fluidRow(
-                column(1,
-                       offset = 1,
-                       actionButton("covariance.prev.plot",
-                                    "",
-                                    icon = icon("angle-left", "fa-2x"))
-                )
+              column(1,
+                     offset = 8,
+                     actionButton("covariance.next.plot",
+                                  "",
+                                  icon = icon("angle-right", "fa-2x"))
               )
             )
-          } else {
-            fluidPage(
-              wellPanel(
-                plotOutput("covariance.plot.output")
-              ),
-              
-              fluidRow(
-                column(1,
-                       offset = 1,
-                       actionButton("covariance.prev.plot",
-                                    "",
-                                    icon = icon("angle-left", "fa-2x"))
-                ),
-                
-                column(1,
-                       offset = 8,
-                       actionButton("covariance.next.plot",
-                                    "",
-                                    icon = icon("angle-right", "fa-2x"))
-                )
-              )
-            )
-          }
-        })
-        
-        output$covariance.plot.output <- renderPlot({
-          grid.draw(values$covariance.active.plot)
-        })
-      } else {
-        
-        values$covariance.active.index <- values$covariance.active.index %% values$covariance.num.plots + 1
+          )
+        }
+      })
       
-        values$covariance.active.plot <- values$covariance.plots[[values$covariance.active.index]]
-        
-        output$covariance.plot.ui <- renderUI({
-          if (values$covariance.active.index == values$covariance.num.plots) {
-            fluidPage(
-              wellPanel(
-                plotOutput("covariance.plot.output")
-              ),
-            
-              fluidRow(
-                column(1,
-                       offset = 1,
-                       actionButton("covariance.prev.plot",
-                                    "",
-                                    icon = icon("angle-left", "fa-2x"))
-                )
-              )
-            )
-          } else {
-            fluidPage(
-              wellPanel(
-                plotOutput("covariance.plot.output")
-              ),
-            
-              fluidRow(
-                column(1,
-                       offset = 1,
-                       actionButton("covariance.prev.plot",
-                                    "",
-                                    icon = icon("angle-left", "fa-2x"))
-                ),
-                
-                column(1,
-                       offset = 8,
-                       actionButton("covariance.next.plot",
-                                    "",
-                                    icon = icon("angle-right", "fa-2x"))
-                )
-              )
-            )
-          }
-        })
-      
-        output$covariance.plot.output <- renderPlot({
-          values$covariance.active.plot
-        })
-      }
+      output$covariance.plot.output <- renderPlot({
+        grid.draw(values$covariance.active.plot)
+      })
     }
   })
   
   # On button press, move to previous plot(s)
   observeEvent(input$covariance.prev.plot, {
     if (values$covariance.num.plots > 0) {
-      if (input$covariance.method == "both") {
-        values$covariance.active.index <- values$covariance.num.plots + (values$covariance.active.index - 1) %% (-values$covariance.num.plots)
-        values$covariance.active.plot  <- values$covariance.plots[[values$covariance.active.index]]
-        
-        output$covariance.plot.ui <- renderUI({
-          if (values$covariance.active.index == 1) {
-            fluidPage(
-              wellPanel(
-                plotOutput("covariance.plot.output")
+      values$covariance.active.index <- values$covariance.num.plots + (values$covariance.active.index - 1) %% (-values$covariance.num.plots)
+      values$covariance.active.plot  <- values$covariance.plots[[values$covariance.active.index]]
+      
+      output$covariance.plot.ui <- renderUI({
+        if (values$covariance.active.index == 1) {
+          fluidPage(
+            wellPanel(
+              plotOutput("covariance.plot.output")
+            ),
+            
+            fluidRow(
+              column(1,
+                     offset = 10,
+                     actionButton("covariance.next.plot",
+                                  "",
+                                  icon = icon("angle-right", "fa-2x"))
+              )
+            )
+          )
+        } else {
+          fluidPage(
+            wellPanel(
+              plotOutput("covariance.plot.output")
+            ),
+            
+            fluidRow(
+              column(1,
+                     offset = 1,
+                     actionButton("covariance.prev.plot",
+                                  "",
+                                  icon = icon("angle-left", "fa-2x"))
               ),
               
-              fluidRow(
-                column(1,
-                       offset = 10,
-                       actionButton("covariance.next.plot",
-                                    "",
-                                    icon = icon("angle-right", "fa-2x"))
-                )
+              column(1,
+                     offset = 8,
+                     actionButton("covariance.next.plot",
+                                  "",
+                                  icon = icon("angle-right", "fa-2x"))
               )
             )
-          } else {
-            fluidPage(
-              wellPanel(
-                plotOutput("covariance.plot.output")
-              ),
-              
-              fluidRow(
-                column(1,
-                       offset = 1,
-                       actionButton("covariance.prev.plot",
-                                    "",
-                                    icon = icon("angle-left", "fa-2x"))
-                ),
-                
-                column(1,
-                       offset = 8,
-                       actionButton("covariance.next.plot",
-                                    "",
-                                    icon = icon("angle-right", "fa-2x"))
-                )
-              )
-            )
-          }
-        })
-        
-        output$covariance.plot.output <- renderPlot({
-          grid.draw(values$covariance.active.plot)
-        })
-      } else {
-        values$covariance.active.index <- values$covariance.num.plots + (values$covariance.active.index - 1) %% (-values$covariance.num.plots)
+          )
+        }
+      })
       
-        values$covariance.active.plot <- values$covariance.plots[[values$covariance.active.index]]
-        
-        output$covariance.plot.ui <- renderUI({
-          if (values$covariance.active.index == 1) {
-            fluidPage(
-              wellPanel(
-                plotOutput("covariance.plot.output")
-              ),
-            
-              fluidRow(
-                column(1,
-                       offset = 10,
-                       actionButton("covariance.next.plot",
-                                    "",
-                                    icon = icon("angle-right", "fa-2x"))
-                )
-              )
-            )
-          } else {
-            fluidPage(
-              wellPanel(
-                plotOutput("covariance.plot.output")
-              ),
-            
-              fluidRow(
-                column(1,
-                       offset = 1,
-                       actionButton("covariance.prev.plot",
-                                    "",
-                                    icon = icon("angle-left", "fa-2x"))
-                ),
-                
-                column(1,
-                       offset = 8,
-                       actionButton("covariance.next.plot",
-                                    "",
-                                    icon = icon("angle-right", "fa-2x"))
-                )
-              )
-            )
-          }
-        })
-      
-        output$covariance.plot.output <- renderPlot({
-          values$covariance.active.plot
-        })
-      }
+      output$covariance.plot.output <- renderPlot({
+        grid.draw(values$covariance.active.plot)
+      })
     }
   })
   
@@ -2194,28 +2254,54 @@ shinyServer(function(input, output) {
   
   # Reset all windows once new data set is loaded
   observeEvent(input$display.table, {
-    if (values$regress.active) {
-      output$covariance.results <- renderPrint({ invisible() })
+    if (values$linRegress.active) {
+      output$linRegress.results <- renderPrint({ invisible() })
       
-      values$regress.active <- F
+      values$linRegress.active <- FALSE
+      
+      if (values$linRegress.plots.active) {
+        output$linRegress.plot.ui <- renderUI({ invisible() })
+        
+        values$linRegress.plots.active <- FALSE
+      }
     }
     
-    if (values$covariance.plots.active) {
-      output$covariance.plot.ui <- renderUI({ invisible() })
+    
+    
+    if (values$covariance.active) {
+      output$covariance.results <- renderPrint({ invisible() })
       
-      values$covariance.plots.active <- F
+      values$covariance.active <- FALSE
+      
+      if (values$covariance.plots.active) {
+        output$covariance.plot.ui <- renderUI({ invisible() })
+        
+        values$covariance.plots.active <- FALSE
+      }
     }
     
     updateTabsetPanel(session  = getDefaultReactiveDomain(), "linear.tabs",
                       selected = "linear.model")
+    
+    updateTabsetPanel(session  = getDefaultReactiveDomain(), "covariance.tabs",
+                      selected = "covariance.est")
   })
   
   # Reset plotting window for linear regression
+  observeEvent(input$linRegress.display, {
+    if (values$linRegress.plots.active) {
+      output$linRegress.plot.ui <- renderUI({ invisible() })
+      
+      values$linRegress.plots.active <- FALSE
+    }
+  })
+  
+  
   observeEvent(input$covariance.display, {
     if (values$covariance.plots.active) {
       output$covariance.plot.ui <- renderUI({ invisible() })
       
-      values$covariance.plots.active <- F
+      values$covariance.plots.active <- FALSE
     }
   })
 })

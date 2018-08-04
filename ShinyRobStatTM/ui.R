@@ -134,8 +134,10 @@ shinyUI(navbarPage("RobStatTM",
   ),
   
   # Tab for Location/Dispersion
-  
   tabPanel("Location-Scale",
+    h3("Location-Scale"),
+    helpText("Description Here"),
+    
     sidebarLayout(
       sidebarPanel(
         tags$head(tags$style(HTML(CSS.format1))),
@@ -182,6 +184,8 @@ shinyUI(navbarPage("RobStatTM",
              
     ## Linear Regression ##
     tabPanel("Linear Regression",
+    h3("Location-Scale"),
+    helpText("Description Here"),
       tabsetPanel(id = "linear.tabs", type = "tabs",
                   
         # Model selection
@@ -264,6 +268,8 @@ shinyUI(navbarPage("RobStatTM",
     ),
     
     tabPanel("Robust Covariance",
+      h3("Location-Scale"),
+      helpText("Description Here"),
       tabsetPanel(id = "covariance.tabs", type = "tabs",
         tabPanel(title = "Estimates", value = "covariance.est",
           sidebarLayout(
@@ -332,6 +338,8 @@ shinyUI(navbarPage("RobStatTM",
     ),
     
     tabPanel("PCA",
+      h3("Location-Scale"),
+      helpText("Description Here"),
       tabsetPanel(id = "pca.tabs", type = "tabs",
         tabPanel(title = "Estimates", value = "pca.est",
           sidebarLayout(
@@ -383,5 +391,9 @@ shinyUI(navbarPage("RobStatTM",
         )
       )
     )
-  )
+  ),
+  
+  tabPanel("About"),
+  
+  tabPanel("Help")
 ))

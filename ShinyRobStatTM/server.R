@@ -1515,10 +1515,14 @@ shinyServer(function(input, output) {
     }
     
     if (input$covariance.method == "classic") {
+      values$covariance.num <- 1
+      
       values$covariance.fit <- covClassic(values$dat.numeric[, input$covariance.variables],
                                           data.name = input$dataset,
                                           corr = corr)
     } else if (input$covariance.method == "rob") {
+      values$covariance.num <- 1
+      
       if (input$covariance.estimator == "MM") {
         values$covariance.fit <- covRobMM.temp(values$dat.numeric[, input$covariance.variables],
                                                data.name = input$dataset,
@@ -1533,6 +1537,8 @@ shinyServer(function(input, output) {
                                         corr = corr)
       }
     } else {
+      values$covariance.num <- 2
+      
       if (input$covariance.estimator == "MM") {
         values$covariance.fit <- fit.models(c(Classic = "covClassic", Robust = "covRobMM"),
                                             data = values$dat.numeric[, input$covariance.variables],
@@ -1564,7 +1570,7 @@ shinyServer(function(input, output) {
     
     plots <- vector(mode = "list")
     
-    if (input$covariance.method == "both") {
+    if (values$covariance.num == 2) {
       fm <- values$covariance.fit
       
       if (input$covariance.eigen == T) {
@@ -1658,9 +1664,9 @@ shinyServer(function(input, output) {
         
         data <- values$dat[, input$covariance.variables]
         
-        fit  <- values$covariance.fit[[1]]
+        fit  <- fm[[1]]
         
-        fit2 <- values$covariance.fit[[2]]
+        fit2 <- fm[[2]]
         
         grid <- expand.grid(x = 1:ncol(data), y = 1:ncol(data))
         
@@ -1845,7 +1851,7 @@ shinyServer(function(input, output) {
       if (input$covariance.dist.dist == T) {
         i <- i + 1
         
-        md <- lapply(values$covariance.fit,
+        md <- lapply(fm,
                      function(x, mat) {
                        sqrt(mahalanobis(mat, x$center, x$cov))
                      },
@@ -1854,7 +1860,7 @@ shinyServer(function(input, output) {
         dat <- data.frame(x = md[[1]], y = md[[2]])
         
         N <- sapply(md, length)
-        p <- sapply(values$covariance.fit, function(x) nrow(x$cov))
+        p <- sapply(fm, function(x) nrow(x$cov))
         
         thresh <- sqrt(qchisq(0.95, df = p))
         
@@ -2252,6 +2258,70 @@ shinyServer(function(input, output) {
                 multiple = TRUE)
   })
   
+  observeEvent(input$pca.display, {
+    if (is.null(dim(values$dat))) {
+      output$pca.results <- renderPrint({
+        cat("ERROR: No Data loaded")
+      })
+    } else if (is.null(input$pca.variables)) {
+      output$pca.results <- renderPrint({
+        cat("ERROR: Missing variables")
+      })
+    } 
+    
+    corr <- FALSE
+    
+    if (input$pca.type == "corr") {
+      corr <- TRUE
+    }
+    
+    if (input$pca.method == "classic") {
+      values$pca.num <- 1
+      
+      values$pca.fit <- prcomp(values$dat.numeric[, input$pca.variables])
+    } else if (input$pca.method == "rob") {
+      values$pca.num <- 1
+      
+      if (input$pca.estimator == "MM") {
+        values$pca.fit <- covRobMM.temp(values$dat.numeric[, input$pca.variables],
+                                               data.name = input$dataset,
+                                               corr = corr)
+      } else if (input$pca.estimator == "Rocke") {
+        values$pca.fit <- covRobRocke.temp(values$dat.numeric[, input$pca.variables],
+                                                  data.name = input$dataset,
+                                                  corr = corr)
+      } else {
+        values$pca.fit <- covRob(values$dat.numeric,
+                                        data.name = input$dataset,
+                                        corr = corr)
+      }
+    } else {
+      values$pca.num <- 2
+      
+      if (input$pca.estimator == "MM") {
+        values$pca.fit <- fit.models(c(Classic = "prcomp", Robust = "covRobMM"),
+                                            data = values$dat.numeric[, input$pca.variables],
+                                            data.name = input$dataset,
+                                            corr = corr)
+      } else if (input$pca.estimator == "Rocke") {
+        values$pca.fit <- fit.models(c(Classic = "prcomp", Robust = "covRobRocke"),
+                                            data = values$dat.numeric[, input$pca.variables],
+                                            data.name = input$dataset,
+                                            corr = corr)
+      } else {
+        values$pca.fit <- fit.models(c(Classic = "prcomp", Robust = "covRob"),
+                                       data = values$dat.numeric[, input$pca.variables],
+                                       data.name = input$dataset,
+                                       corr = corr)
+      }
+    }
+    
+    # Print summary method for pca results
+    output$pca.results <- renderPrint({
+      print(summary(values$pca.fit))
+    })
+  })
+  
   # Reset all windows once new data set is loaded
   observeEvent(input$display.table, {
     if (values$linRegress.active) {
@@ -2265,8 +2335,6 @@ shinyServer(function(input, output) {
         values$linRegress.plots.active <- FALSE
       }
     }
-    
-    
     
     if (values$covariance.active) {
       output$covariance.results <- renderPrint({ invisible() })

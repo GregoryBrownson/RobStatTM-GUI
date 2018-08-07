@@ -12,6 +12,7 @@
 
 library(DT)
 library(shiny)
+library(shinyjs)
 
 # Some custom CSS code for formatting panels
 CSS.format1 <- 
@@ -183,8 +184,8 @@ shinyUI(navbarPage("RobStatTM",
   navbarMenu("Models",
              
     ## Linear Regression ##
-    tabPanel("Linear Regression",
-    h3("Location-Scale"),
+    tabPanel("Robust Linear Regression",
+    h3("Robust Linear Regression"),
     helpText("Description Here"),
       tabsetPanel(id = "linear.tabs", type = "tabs",
                   
@@ -268,7 +269,7 @@ shinyUI(navbarPage("RobStatTM",
     ),
     
     tabPanel("Robust Covariance",
-      h3("Location-Scale"),
+      h3("Robust Covariance"),
       helpText("Description Here"),
       tabsetPanel(id = "covariance.tabs", type = "tabs",
         tabPanel(title = "Estimates", value = "covariance.est",
@@ -307,16 +308,20 @@ shinyUI(navbarPage("RobStatTM",
           sidebarLayout(
             sidebarPanel(
               tags$head(tags$style(HTML(CSS.format1))),
+              useShinyjs(),
               
               h4("Plots"),
               
               checkboxInput("covariance.eigen", "Eigenvalues", TRUE),
               checkboxInput("covariance.mahalanobis", "Mahalanobis Distances", TRUE),
               checkboxInput("covariance.ellipses.matrix", "Ellipses Matrix", TRUE),
+              checkboxInput("covariance.chi.qqplot", "Chi-Square QQ Plot", TRUE),
               
               conditionalPanel(
                 condition = "input['covariance.method'] == 'both'",
-                checkboxInput("covariance.image.display", "Image Display", TRUE)
+                disabled(
+                  checkboxInput("covariance.image.display", "Image Display", TRUE)
+                )
               ),
               
               conditionalPanel(
@@ -337,8 +342,8 @@ shinyUI(navbarPage("RobStatTM",
       )
     ),
     
-    tabPanel("PCA",
-      h3("Location-Scale"),
+    tabPanel("Robust PCA",
+      h3("RObust Principle Component Analysis"),
       helpText("Description Here"),
       tabsetPanel(id = "pca.tabs", type = "tabs",
         tabPanel(title = "Estimates", value = "pca.est",

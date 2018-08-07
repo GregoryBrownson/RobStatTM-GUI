@@ -105,6 +105,69 @@ covRobRocke <- function(data, data.name, corr = F, ...) {
   return(z)
 }
 
+print.summary.covfm <- function(x, digits = max(3, getOption("digits") - 3),
+                                print.distance = FALSE, ...)
+{
+  n.models <- length(x)
+  mod.names <- names(x)
+
+  cat("\nCalls: \n")
+  for(i in 1:n.models) {
+    cat(mod.names[i], ": ")
+    print(x[[i]]$call)
+  }
+
+  p <- dim(x[[1]]$cov)[1]
+  i1 <- rep(seq(p), times = p)
+  i2 <- rep(seq(p), each = p)
+
+  cov.index <- paste("[", paste(i1, i2, sep = ","), "]", sep = "")
+  cov.index <- matrix(cov.index, p, p)
+  cov.index <- cov.index[row(cov.index) >= col(cov.index)]
+
+  cov.unique <- t(sapply(x, function(u) u$cov[row(u$cov) >= col(u$cov)]))
+  dimnames(cov.unique) <- list(mod.names, cov.index)
+
+  cat("\nComparison of Covariance/Correlation Estimates:\n")
+  cat(" (unique correlation terms) \n")
+  print(cov.unique, digits = digits, ...)
+  
+  cov.index <- paste("[", paste(i1, i2, sep = ","), "]", sep = "")
+  cov.index <- matrix(cov.index, p, p)
+  cov.index <- cov.index[row(cov.index) == col(cov.index)]
+
+  cat("\nComparison of Location Estimates: \n")
+  print(center, digits = digits, ...)
+  
+  if (all(sapply(x, function(u) u$corr) == FALSE)) {
+    cov.sd <- t(sapply(x, function(u) sqrt(diag(u$cov))))
+    dimnames(cov.sd) <- list(mod.names, cov.index)
+    cat("\nComparison of Scale Estimates:\n")
+    print(cov.sd, digits = digits, ...)
+  }
+
+  center <- t(sapply(x, function(u) u$center))
+  center.names <- names(x[[1]]$center)
+  dimnames(center) <- list(mod.names, center.names)
+
+  evals <- t(sapply(x, function(u) u$evals))
+  eval.names <- names(x[[1]]$evals)
+  dimnames(evals) <- list(mod.names, eval.names)
+
+  cat("\nComparison of Eigenvalues: \n")
+  print(evals, digits = digits, ...)
+
+  have.dist <- sapply(x, function(u) !is.null(u$dist))
+  if(print.distance && all(have.dist)) {
+    dists <- t(sapply(x, function(u) u$dist))
+    dimnames(dists) <- list(mod.names, names(x[[1]]$dist))
+    cat("\nComparison of Mahalanobis Distances: \n")
+    print(dists, digits = digits, ...)
+  }
+
+  invisible(x)
+}
+
 # Back-end implementation of Shiny server
 shinyServer(function(input, output) {
   
@@ -115,6 +178,7 @@ shinyServer(function(input, output) {
   values$covariance.active <- F
   values$linRegress.plots.active <- F
   values$covariance.plots.active <- F
+  
   
 ####################  
 ## Data Selection ##
@@ -1508,6 +1572,8 @@ shinyServer(function(input, output) {
       })
     } 
     
+    values$covariance.active <- TRUE
+    
     corr <- FALSE
     
     if (input$covariance.type == "corr") {
@@ -1702,7 +1768,8 @@ shinyServer(function(input, output) {
                  theme(axis.text.x  = element_blank(), axis.text.y  = element_blank(),
                        axis.ticks.x = element_blank(), axis.ticks.y = element_blank(),
                        axis.title.x = element_blank(), axis.title.y = element_blank(),
-                       panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+                       panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                       panel.spacing = unit(0, "lines")) +
                  facet_grid(xvar ~ yvar, scales = "free") +
                  theme(aspect.ratio = 1)
         
@@ -1838,10 +1905,44 @@ shinyServer(function(input, output) {
         
         plt <- plt + geom_text(data = corr.text, aes_string(x = "x", y = "y", label = "lab", color = "type"),
                                size = text.size, na.rm = T, show.legend = F, check_overlap = TRUE) +
-                 scale_color_manual(values = c("black", "red")) +
-                 scale_linetype_manual(values = c("solid", "dashed"))
+                 scale_color_manual(values = c("red", "black")) +
+                 scale_linetype_manual(values = c("dashed", "solid"))
         
         plots[[i]] <- ggplotGrob(plt)
+      }
+      
+      if (input$covariance.chi.qqplot == T) {
+        i <- i + 1
+        
+        data <- values$dat[, input$covariance.variables]
+        
+        md <- lapply(fm,
+                     function(x, mat) {
+                       sqrt(mahalanobis(mat, x$center, x$cov))
+                     },
+                     values$dat.numeric[, input$covariance.variables])
+        
+        chisq.points <- sqrt(qchisq(ppoints(nrow(data)), ncol(data)))
+        
+        dat <- data.frame(x = chisq.points, y = sort(md[[1]]))
+        
+        p1 <- ggplot(data = dat, aes(x = x, y = y)) +
+                ggtitle("Classic") +
+                xlab("Chi-Squared Quantiles") +
+                ylab("Sorted Distances") +
+                geom_point(color = "dodgerblue2", shape = 18) +
+                geom_abline(slope = 1, intercept = 0, linetype = 2)
+        
+        dat <- data.frame(x = chisq.points, y = sort(md[[2]]))
+        
+        p2 <- ggplot(data = dat, aes(x = x, y = y)) +
+                ggtitle("Robust") +
+                xlab("Chi-Squared Quantiles") +
+                ylab("Sorted Distances") +
+                geom_point(color = "dodgerblue2", shape = 18) +
+                geom_abline(slope = 1, intercept = 0, linetype = 2)
+        
+        plots[[i]] <- cbind(ggplotGrob(p1), ggplotGrob(p2), size = "last")
       }
       
       if (input$covariance.image.display == T) {
@@ -1991,7 +2092,8 @@ shinyServer(function(input, output) {
                  theme(axis.text.x  = element_blank(), axis.text.y  = element_blank(),
                        axis.ticks.x = element_blank(), axis.ticks.y = element_blank(),
                        axis.title.x = element_blank(), axis.title.y = element_blank(),
-                       panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+                       panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                       panel.spacing = unit(0, "lines")) +
                  facet_grid(xvar ~ yvar, scales = "free") +
                  theme(aspect.ratio = 1)
         
@@ -2095,6 +2197,29 @@ shinyServer(function(input, output) {
         
         plots[[i]] <- ggplotGrob(plt)
       }
+    }
+    
+    if (input$covariance.chi.qqplot == T) {
+        i <- i + 1
+        
+        data <- values$dat[, input$covariance.variables]
+        
+        md <- lapply(fm,
+                     function(x, mat) {
+                       sqrt(mahalanobis(mat, x$center, x$cov))
+                     },
+                     values$dat.numeric[, input$covariance.variables])
+        
+        chisq.points <- sqrt(qchisq(ppoints(nrow(data)), ncol(data)))
+        
+        dat <- data.frame(x = chisq.points, y = sort(md[[1]]))
+        
+        p1 <- ggplot(data = dat, aes(x = x, y = y)) +
+                ggtitle("Classic") +
+                xlab("Chi-Squared Quantiles") +
+                ylab("Sorted Distances") +
+                geom_point(color = "dodgerblue2", shape = 18) +
+                geom_abline(slope = 1, intercept = 0, linetype = 2)
     }
     
     if (i == 0) {
@@ -2363,7 +2488,6 @@ shinyServer(function(input, output) {
       values$linRegress.plots.active <- FALSE
     }
   })
-  
   
   observeEvent(input$covariance.display, {
     if (values$covariance.plots.active) {

@@ -280,17 +280,17 @@ shinyUI(navbarPage("RobStatTM",
               uiOutput("covariance.select.variables"),
               
               radioButtons("covariance.method", "Method",
-                          choices = c("Both"      = "both",
-                                      "Classical" = "classic",
-                                      "Robust"    = "rob")),
+                           choices = c("Both"      = "both",
+                                       "Classical" = "classic",
+                                       "Robust"    = "rob")),
               
               radioButtons("covariance.type", "Type",
-                          choices = c("Covariances"  = "cov",
-                                      "Correlations" = "corr")),
+                           choices = c("Covariances"  = "cov",
+                                       "Correlations" = "corr")),
               
               conditionalPanel("input['covariance.method'] != 'classic'",
                 selectInput("covariance.estimator", "Robust Covariance Estimator",
-                            choices = c("Auto", "MM", "Rocke"))
+                             choices = c("Auto", "MM", "Rocke"))
               ),
               
               actionButton("covariance.display", "Results")
@@ -354,14 +354,17 @@ shinyUI(navbarPage("RobStatTM",
               uiOutput("pca.select.variables"),
               
               radioButtons("pca.method", "Method",
-                          choices = c("Both", "Classical", "Robust")),
+                           choices = c("Both"      = "both",
+                                       "Classical" = "classic",
+                                       "Robust"    = "rob")),
               
               radioButtons("pca.type", "Type",
-                          choices = c("Covariances", "Correlations")),
+                           choices = c("Covariances"  = "cov",
+                                       "Correlations" = "corr")),
               
               conditionalPanel("input['pca.method'] != 'Classical'",
                 selectInput("pca.estimator", "Robust PCA Estimator",
-                            choices = c("MM", "Rocke"))                 
+                            choices = c("Auto", "MM", "Rocke"))
               ),
               
               actionButton("pca.display", "Results")

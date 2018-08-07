@@ -132,23 +132,22 @@ print.summary.covfm <- function(x, digits = max(3, getOption("digits") - 3),
   cat(" (unique correlation terms) \n")
   print(cov.unique, digits = digits, ...)
   
-  cov.index <- paste("[", paste(i1, i2, sep = ","), "]", sep = "")
-  cov.index <- matrix(cov.index, p, p)
-  cov.index <- cov.index[row(cov.index) == col(cov.index)]
+  center <- t(sapply(x, function(u) u$center))
+  center.names <- names(x[[1]]$center)
+  dimnames(center) <- list(mod.names, center.names)
 
   cat("\nComparison of Location Estimates: \n")
   print(center, digits = digits, ...)
   
   if (all(sapply(x, function(u) u$corr) == FALSE)) {
+    cov.index <- paste("[", paste(1:p, 1:p, sep = ","), "]", sep = "")
+  
     cov.sd <- t(sapply(x, function(u) sqrt(diag(u$cov))))
     dimnames(cov.sd) <- list(mod.names, cov.index)
+    
     cat("\nComparison of Scale Estimates:\n")
     print(cov.sd, digits = digits, ...)
   }
-
-  center <- t(sapply(x, function(u) u$center))
-  center.names <- names(x[[1]]$center)
-  dimnames(center) <- list(mod.names, center.names)
 
   evals <- t(sapply(x, function(u) u$evals))
   eval.names <- names(x[[1]]$evals)
@@ -166,6 +165,119 @@ print.summary.covfm <- function(x, digits = max(3, getOption("digits") - 3),
   }
 
   invisible(x)
+}
+
+options(scipen = -2)
+
+# Custom stuff for robust pca
+princompRob <- function(data, est = "Auto", center = T, scale = F, ...) {
+  
+  stopifnot(any(est == c("Auto", "MM", "Rocke")))
+  
+  if (est == "MM") {
+    X <- RobStatTM::covRobMM(data)
+  } else if (est == "Rocke") {
+    X <- RobStatTM::covRobRocke(data)
+  } else {
+    X <- RobStatTM::covRob(data)
+  }
+  
+  X.eigen  <- eigen(X$cov)
+  X.scaled <- scale(data, center = center, scale = scale)
+  
+  z <- list()
+  
+  z$center   <- X$center
+  z$sdev     <- sqrt(X.eigen$values)
+  z$rotation <- X.eigen$vectors
+  z$x        <- X.scaled %*% X.eigen$vectors
+  z$scale    <- ifelse(scale, attr(X.scales, "scaled:scale"), FALSE)
+  
+  class(z) <- "princompRob"
+  
+  z
+}
+
+summary.princompRob <- function(object, ...) {
+  chkDots(...)
+  vars <- object$sdev^2
+  vars <- vars/sum(vars)
+  importance <- rbind("Standard deviation" = object$sdev,
+                      "Proportion of Variance" = round(vars, 5),
+                      "Cumulative Proportion" = round(cumsum(vars), 5))
+  colnames(importance) <- colnames(object$rotation)
+  object$importance <- importance
+  class(object) <- "summary.princompRob"
+  object
+}
+
+print.summary.princompRob <- function(x,
+                                      digits = max(3L, getOption("digits") - 3L),
+                                      ...) {
+  cat("Importance of components:\n")
+  print(x$importance, digits = digits, ...)
+  invisible(x)
+}
+
+# Register new fmclass along with subclasses
+fmclass.register("pcompfm", c("prcomp", "princompRob"))
+
+summary.pcompfm <- function(object, ...) {
+  object <- lapply(object, summary, ...)
+  oldClass(object) <- "summary.pcompfm"
+  object
+}
+
+# Summary method comparing 
+print.summary.pcompfm <- function(x,
+                                  digits = max(3L, getOption("digits") - 3L),
+                                  ...) {
+  n <- ncol(x[[1]]$rotation)
+  
+  components <- lapply(x, function(u) formatC(signif(u$rotation, 2), format = "e", digits = 2))
+  components[[1]] <- sapply(components[[1]], function(u) {
+                              if(u < 0.0) {
+                                as.character(u)
+                              } else {
+                                paste0(" ", u)
+                              }
+                            })
+  components[[2]] <- sapply(components[[2]], function(u) {
+                              if(u < 0.0) {
+                                paste0('(', u, ')')
+                              } else {
+                                paste0("( ", u, ')')
+                              }
+                            })
+  components <- paste(components[[1]], components[[2]])
+  
+  components <- noquote(matrix(components, ncol = n))
+  
+  pc.index <- sapply(1:n, function(i) paste("PC", i))
+  
+  pc.index <- format(pc.index, width = max(nchar(components)), justify = "centre")
+  
+  dimnames(components) <- list(rep("Classic (Robust)", n), pc.index)
+  
+  cat("Comparison of Principal Components:\n")
+  print(components, ...)
+  
+  pc.index <- sapply(1:n, function(i) paste("PC", i))
+  
+  sd <- t(sapply(x, function(u) u$sdev))
+  dimnames(sd) <- list(c("Classic", "Robust"), pc.index)
+  
+  sd.total <- rowSums(sd)
+  sd.prop  <- sd / sd.total
+  sd.cum   <- t(apply(sd, 1, cumsum)) / sd.total
+  
+  cat("\nComparison of Importance of Components\n")
+  cat("\n\tStandard Deviation:\n")
+  print(sd, digits = digits, ...)
+  cat("\n\tProportion of Variance:\n")
+  print(sd.prop, digits = digits, ...)
+  cat("\n\tCumulative Proportion:\n")
+  print(sd.cum, digits = digits, ...)
 }
 
 # Back-end implementation of Shiny server
@@ -1580,25 +1692,28 @@ shinyServer(function(input, output) {
       corr <- TRUE
     }
     
+    data <- values$dat[, input$covariance.variables]
+    
     if (input$covariance.method == "classic") {
       values$covariance.num <- 1
       
-      values$covariance.fit <- covClassic(values$dat.numeric[, input$covariance.variables],
+      
+      values$covariance.fit <- covClassic(data,
                                           data.name = input$dataset,
                                           corr = corr)
     } else if (input$covariance.method == "rob") {
       values$covariance.num <- 1
       
       if (input$covariance.estimator == "MM") {
-        values$covariance.fit <- covRobMM.temp(values$dat.numeric[, input$covariance.variables],
+        values$covariance.fit <- covRobMM.temp(data,
                                                data.name = input$dataset,
                                                corr = corr)
       } else if (input$covariance.estimator == "Rocke") {
-        values$covariance.fit <- covRobRocke.temp(values$dat.numeric[, input$covariance.variables],
+        values$covariance.fit <- covRobRocke.temp(data,
                                                   data.name = input$dataset,
                                                   corr = corr)
       } else {
-        values$covariance.fit <- covRob(values$dat.numeric,
+        values$covariance.fit <- covRob(data,
                                         data.name = input$dataset,
                                         corr = corr)
       }
@@ -1607,17 +1722,17 @@ shinyServer(function(input, output) {
       
       if (input$covariance.estimator == "MM") {
         values$covariance.fit <- fit.models(c(Classic = "covClassic", Robust = "covRobMM"),
-                                            data = values$dat.numeric[, input$covariance.variables],
+                                            data = data,
                                             data.name = input$dataset,
                                             corr = corr)
       } else if (input$covariance.estimator == "Rocke") {
         values$covariance.fit <- fit.models(c(Classic = "covClassic", Robust = "covRobRocke"),
-                                            data = values$dat.numeric[, input$covariance.variables],
+                                            data = data,
                                             data.name = input$dataset,
                                             corr = corr)
       } else {
         values$covariance.fit <- fit.models(c(Classic = "covClassic", Robust = "covRob"),
-                                            data = values$dat.numeric[, input$covariance.variables],
+                                            data = data,
                                             data.name = input$dataset,
                                             corr = corr)
       }
@@ -1633,6 +1748,8 @@ shinyServer(function(input, output) {
     values$covariance.plots.active <- TRUE
     
     i <- 0
+    
+    data <- values$dat[, input$covariance.variables]
     
     plots <- vector(mode = "list")
     
@@ -1670,7 +1787,7 @@ shinyServer(function(input, output) {
                      function(x, mat) {
                        sqrt(mahalanobis(mat, x$center, x$cov))
                      },
-                     values$dat.numeric[, input$covariance.variables])
+                     data)
         
         N <- sapply(md, length)
         p <- sapply(values$covariance.fit, function(x) nrow(x$cov))
@@ -1727,8 +1844,6 @@ shinyServer(function(input, output) {
           y <- loc[2] + y
           rbind(cbind(x1, y), cbind(rev(x2), rev(y)))
         }
-        
-        data <- values$dat[, input$covariance.variables]
         
         fit  <- fm[[1]]
         
@@ -1914,13 +2029,11 @@ shinyServer(function(input, output) {
       if (input$covariance.chi.qqplot == T) {
         i <- i + 1
         
-        data <- values$dat[, input$covariance.variables]
-        
         md <- lapply(fm,
                      function(x, mat) {
                        sqrt(mahalanobis(mat, x$center, x$cov))
                      },
-                     values$dat.numeric[, input$covariance.variables])
+                     data)
         
         chisq.points <- sqrt(qchisq(ppoints(nrow(data)), ncol(data)))
         
@@ -1956,7 +2069,7 @@ shinyServer(function(input, output) {
                      function(x, mat) {
                        sqrt(mahalanobis(mat, x$center, x$cov))
                      },
-                     values$dat.numeric[, input$covariance.variables])
+                     data)
         
         dat <- data.frame(x = md[[1]], y = md[[2]])
         
@@ -2010,7 +2123,7 @@ shinyServer(function(input, output) {
       if (input$covariance.mahalanobis == T) {
         i <- i + 1
         
-        md <- sqrt(mahalanobis(values$dat.numeric[, input$covariance.variables],
+        md <- sqrt(mahalanobis(data,
                                fit$center, fit$cov))
         
         n <- length(md)
@@ -2055,8 +2168,6 @@ shinyServer(function(input, output) {
           y <- loc[2] + y
           rbind(cbind(x1, y), cbind(rev(x2), rev(y)))
         }
-        
-        data <- values$dat[, input$covariance.variables]
         
         grid <- expand.grid(x = 1:ncol(data), y = 1:ncol(data))
         
@@ -2202,13 +2313,11 @@ shinyServer(function(input, output) {
     if (input$covariance.chi.qqplot == T) {
         i <- i + 1
         
-        data <- values$dat[, input$covariance.variables]
-        
         md <- lapply(fm,
                      function(x, mat) {
                        sqrt(mahalanobis(mat, x$center, x$cov))
                      },
-                     values$dat.numeric[, input$covariance.variables])
+                     data)
         
         chisq.points <- sqrt(qchisq(ppoints(nrow(data)), ncol(data)))
         
@@ -2394,51 +2503,23 @@ shinyServer(function(input, output) {
       })
     } 
     
-    corr <- FALSE
-    
-    if (input$pca.type == "corr") {
-      corr <- TRUE
-    }
+    data <- values$dat.numeric[, input$pca.variables]
     
     if (input$pca.method == "classic") {
       values$pca.num <- 1
       
-      values$pca.fit <- prcomp(values$dat.numeric[, input$pca.variables])
+      values$pca.fit <- prcomp(data)
     } else if (input$pca.method == "rob") {
       values$pca.num <- 1
       
-      if (input$pca.estimator == "MM") {
-        values$pca.fit <- covRobMM.temp(values$dat.numeric[, input$pca.variables],
-                                               data.name = input$dataset,
-                                               corr = corr)
-      } else if (input$pca.estimator == "Rocke") {
-        values$pca.fit <- covRobRocke.temp(values$dat.numeric[, input$pca.variables],
-                                                  data.name = input$dataset,
-                                                  corr = corr)
-      } else {
-        values$pca.fit <- covRob(values$dat.numeric,
-                                        data.name = input$dataset,
-                                        corr = corr)
-      }
+      values$pca.fit <- princompRob(data,
+                                    est = input$pca.estimator)
     } else {
       values$pca.num <- 2
       
-      if (input$pca.estimator == "MM") {
-        values$pca.fit <- fit.models(c(Classic = "prcomp", Robust = "covRobMM"),
-                                            data = values$dat.numeric[, input$pca.variables],
-                                            data.name = input$dataset,
-                                            corr = corr)
-      } else if (input$pca.estimator == "Rocke") {
-        values$pca.fit <- fit.models(c(Classic = "prcomp", Robust = "covRobRocke"),
-                                            data = values$dat.numeric[, input$pca.variables],
-                                            data.name = input$dataset,
-                                            corr = corr)
-      } else {
-        values$pca.fit <- fit.models(c(Classic = "prcomp", Robust = "covRob"),
-                                       data = values$dat.numeric[, input$pca.variables],
-                                       data.name = input$dataset,
-                                       corr = corr)
-      }
+      values$pca.fit <- fit.models(Classic = prcomp(data),
+                                   Robust  = princompRob(data,
+                                                         est = input$pca.estimator))
     }
     
     # Print summary method for pca results

@@ -77,8 +77,8 @@ shinyUI(navbarPage("RobStatTM",
         
         # Radio buttons to select data source
         radioButtons("source", "Data Source",
-                     choices = c(Upload      = "upload",
-                                 "R Package" = "library"),
+                     choices = c("R Package" = "library",
+                                 "Upload"    = "upload"),
                      selected = "library"),
         # Create panel for uploading data
         conditionalPanel(
@@ -107,7 +107,9 @@ shinyUI(navbarPage("RobStatTM",
                        choices  = c(None           = "",
                                     "Double Quote" = '"',
                                     "Single Quote" = "'"),
-                       selected = '"')
+                       selected = '"'),
+          
+          checkboxInput("data.ts", "Time Series?", FALSE)
         ),
         
         conditionalPanel(
@@ -174,7 +176,7 @@ shinyUI(navbarPage("RobStatTM",
       mainPanel(
         tags$head(tags$style(HTML(CSS.format1))),
         # Display values for location and scale estimators
-        verbatimTextOutput("results.Location")
+        htmlOutput("results.Location")
       )
     )
   ),
@@ -209,7 +211,7 @@ shinyUI(navbarPage("RobStatTM",
             mainPanel(
               tags$head(tags$style(HTML(CSS.format1))),
               
-              verbatimTextOutput("linRegress.results")
+              uiOutput("linRegress.results.ui")
             )
           )
         ), 
@@ -236,11 +238,11 @@ shinyUI(navbarPage("RobStatTM",
               tags$hr(),
               
               h4("Options"),
-              checkboxInput("include.smooth", "Include Smooth", TRUE),
+              #checkboxInput("include.smooth", "Include Smooth", TRUE),
               checkboxInput("include.rugplot", "Include Rugplot", FALSE),
               checkboxInput("linRegress.qq.env", "QQ Plot Envelope", TRUE),
               checkboxInput("linRegress.qqline.robust", "Include Robust QQ Line", TRUE),
-              uiOutput("extreme.points"),
+              #uiOutput("extreme.points"),
               
               # Button to run selected regression
               actionButton("linRegress.display.plots", "View Plots")
@@ -249,19 +251,8 @@ shinyUI(navbarPage("RobStatTM",
             mainPanel(
               tags$head(tags$style(HTML(CSS.format1))),
               
+              htmlOutput("linRegress.plot.err"),
               uiOutput("linRegress.plot.ui")
-            )
-          )
-        ),
-
-        tabPanel("Predict",
-          sidebarLayout(
-            sidebarPanel(
-              
-            ),
-            
-            mainPanel(
-              
             )
           )
         )

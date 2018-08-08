@@ -7,6 +7,7 @@
 #              selecting location and scale
 #              parameters
 
+library(crayon)
 library(DT)
 library(fit.models)
 library(ggplot2)
@@ -167,7 +168,7 @@ print.summary.covfm <- function(x, digits = max(3, getOption("digits") - 3),
   invisible(x)
 }
 
-options(scipen = -2)
+options(scipen = -1)
 
 # Custom stuff for robust pca
 princompRob <- function(data, est = "Auto", center = T, scale = F, ...) {
@@ -220,7 +221,9 @@ print.summary.princompRob <- function(x,
 }
 
 # Register new fmclass along with subclasses
-fmclass.register("pcompfm", c("prcomp", "princompRob"))
+if (is.null(fit.models:::e$fmreg$pcompfm)) {
+  fmclass.register("pcompfm", c("prcomp", "princompRob"))
+}
 
 summary.pcompfm <- function(object, ...) {
   object <- lapply(object, summary, ...)
@@ -345,9 +348,14 @@ shinyServer(function(input, output) {
                       sep    = input$sep,
                       quote  = input$quote)
       
+      if (input$data.ts == TRUE) {
+        values$dat[, 1] <- as.Date(values$dat[, 1])
+        
+        values$dat <- xts(values$dat[, -1], values$dat[, 1])
+      }
+      
       # If there are no headers, give data headers
-      if (input$header == FALSE)
-      {
+      if (input$header == FALSE) {
         colnames(dat)[-1] <- paste0('X', 1:(ncol(dat) - 1))
       }
     } else {
@@ -365,11 +373,17 @@ shinyServer(function(input, output) {
     # Get variable names
     values$dat.variables <- colnames(values$dat)
     
-    values$dat.numeric <- values$dat[, sapply(values$dat, is.numeric) | sapply(values$dat, is.integer)]
+    num.index <- sapply(values$dat, is.numeric)
+    
+    values$dat.numeric <- values$dat[, num.index]
     
     values$dat.numeric.variables <- colnames(values$dat.numeric)
     
-    return (as.data.frame(values$dat))
+    data <- values$dat
+    
+    data[, num.index] <- round(data[, num.index], 3)
+    
+    return (as.data.frame(data))
   })
   
   
@@ -387,7 +401,7 @@ shinyServer(function(input, output) {
     
     # Render select input for variables
     selectInput("variable", "Variable",
-                choices = values$dat.variables)
+                choices = values$dat.numeric.variables)
   })
   
   # On-click, find the estimators and create string object of results
@@ -405,10 +419,17 @@ shinyServer(function(input, output) {
                    tol   = input$tolerance)
     
     # Store results in string objects
-    line1 <- paste0("Location (Error): ", round(est$mu, 4), " (", round(est$std.mu, 4), ")")
-    line2 <- paste0("      Dispersion: ", round(est$disper, 4))
+    
+    line1 <- paste0("<font color=\"#000000\">Location <strong>(SE)</strong>: ", round(est$mu, 4), " (<strong>", round(est$std.mu, 4), ")</strong><br>")
+    line2 <- paste0("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Dispersion: ", round(est$disper, 4),"</font>")
 
-    return(paste(line1, line2, sep = "\n"))
+    return(paste0("<div style=\"border: 1px solid #ccc;
+                                border-radius: 6px;
+                                padding: 0px 5px;
+                                margin: 5px -10px;
+                                background-color: #f5f5f5;\">",
+                    line1, line2,
+                  "</div>"))
   })
   
   # Display output
@@ -504,7 +525,7 @@ shinyServer(function(input, output) {
       return("")
     }
     
-    ind.vars <- setdiff(values$dat.variables, input$linRegress.dependent)
+    ind.vars <- setdiff(values$dat.numeric.variables, input$linRegress.dependent)
     
     # Render select input for variables
     selectInput("linRegress.independent", "Independent",
@@ -672,92 +693,115 @@ shinyServer(function(input, output) {
   })
   
   observeEvent(input$linRegress.display, {
-    if (is.null(input$linRegress.independent)) {
-      output$linRegress.results <- renderPrint({
-        cat("ERROR: Missing dependent or independent variables")
+    if (is.null(values$dat)) {
+      output$linRegress.results.ui <- renderUI({
+        htmlOutput("linRegress.results")
+      })
+      
+      output$linRegress.results <- renderText({
+        return(paste0("<font color=\"#FF0000\"><b>", "ERROR: No data loaded", "</b><font>"))
+      })
+    } else if (any(is.null(input$linRegress.independent) || is.null(input$linRegress.dependent))) {
+      output$linRegress.results.ui <- renderUI({
+        htmlOutput("linRegress.results")
+      })
+      
+      output$linRegress.results <- renderText({
+        return(paste0("<font color=\"#FF0000\"><b>", "ERROR: Missing dependent or independent variables", "</b><font>"))
       })
     } else if (!is.numeric(values$dat[, input$linRegress.dependent])) {
-      output$linRegress.results <- renderPrint({ invalid_response() })
-    }
-    
-    if (input$linRegress.second.method) {
-      methods <- c(input$linRegress.fit.option, input$linRegress.fit.option2)
+      output$linRegress.results.ui <- renderUI({
+        htmlOutput("linRegress.results")
+      })
       
-      index <- match(methods, values$linRegress.methods)
-    
-      n <- length(index)
-    
-      model <- sapply(index,
-                      function(i, m) {
-                        m[i]
-                      },
-                      values$linRegress.functions)
+      output$linRegress.results <- renderText({
+        return(paste0("<font color=\"#FF0000\"><b>", invalid_response(), "</b><font>"))
+      })
     } else {
-      model <- values$linRegress.functions[match(input$linRegress.fit.option, values$linRegress.methods)]
-    }
-    
-    fit <- vector(mode = "list", length = length(index))
-    if (model[1] == "lm") {
-      fit[[1]] <- do.call(model[1], list(as.formula(input$linRegress.formula.text), data = values$dat))
-    } else {
-      control <- lmrobdet.control(efficiency = input$linRegress.eff,
-                                  family = input$linRegress.family,
-                                  compute.rd = T)
-    
-      fit[[1]] <- do.call(model[1], list(as.formula(input$linRegress.formula.text),
-                                         data    = values$dat,
-                                         control = control))
-    }
-    
-    fit[[1]]$call <- call(model[1], as.formula(input$linRegress.formula.text))
-    
-    if (input$linRegress.second.method) {
-      if (model[2] == "lm") {
-        fit[[2]] <- do.call(model[2], list(as.formula(input$linRegress.formula.text2), data = values$dat))
+      output$linRegress.results.ui <- renderUI({
+        verbatimTextOutput("linRegress.results")
+      })
+      
+      if (input$linRegress.second.method) {
+        methods <- c(input$linRegress.fit.option, input$linRegress.fit.option2)
+        
+        index <- match(methods, values$linRegress.methods)
+      
+        n <- length(index)
+      
+        model <- sapply(index,
+                        function(i, m) {
+                          m[i]
+                        },
+                        values$linRegress.functions)
       } else {
-        control2 <- lmrobdet.control(efficiency = input$linRegress.eff2,
-                                    family = input$linRegress.family2,
+        model <- values$linRegress.functions[match(input$linRegress.fit.option, values$linRegress.methods)]
+      }
+      
+      fit <- vector(mode = "list", length = length(index))
+      if (model[1] == "lm") {
+        fit[[1]] <- do.call(model[1], list(as.formula(input$linRegress.formula.text), data = values$dat))
+      } else {
+        control <- lmrobdet.control(efficiency = input$linRegress.eff,
+                                    family = input$linRegress.family,
                                     compute.rd = T)
       
-        fit[[2]] <- do.call(model[2], list(as.formula(input$linRegress.formula.text2),
+        fit[[1]] <- do.call(model[1], list(as.formula(input$linRegress.formula.text),
                                            data    = values$dat,
-                                           control = control2))
+                                           control = control))
       }
-        
-      fit[[2]]$call <- call(model[2], as.formula(input$linRegress.formula.text2))
       
-      fm <- fit.models(fit[[1]], fit[[2]])
-    } else {
-      fm <- fit.models(fit[[1]])
-    }
-
-    values$linRegress.active <- T
-    
-    if (input$linRegress.second.method) {
-      if (input$linRegress.fit.option == input$linRegress.fit.option2) {
-        values$linRegress.models <- c(paste(input$linRegress.fit.option, "1"), paste(input$linRegress.fit.option[1], "2"))
+      fit[[1]]$call <- call(model[1], as.formula(input$linRegress.formula.text))
+      
+      if (input$linRegress.second.method) {
+        if (model[2] == "lm") {
+          fit[[2]] <- do.call(model[2], list(as.formula(input$linRegress.formula.text2), data = values$dat))
+        } else {
+          control2 <- lmrobdet.control(efficiency = input$linRegress.eff2,
+                                      family = input$linRegress.family2,
+                                      compute.rd = T)
+        
+          fit[[2]] <- do.call(model[2], list(as.formula(input$linRegress.formula.text2),
+                                             data    = values$dat,
+                                             control = control2))
+        }
+          
+        fit[[2]]$call <- call(model[2], as.formula(input$linRegress.formula.text2))
+        
+        fm <- fit.models(fit[[1]], fit[[2]])
       } else {
-        values$linRegress.models <- c(input$linRegress.fit.option, input$linRegress.fit.option2)
+        fm <- fit.models(fit[[1]])
       }
-    } else {
-      values$linRegress.models <- input$linRegress.fit.option
+  
+      values$linRegress.active <- T
+      
+      if (input$linRegress.second.method) {
+        if (input$linRegress.fit.option == input$linRegress.fit.option2) {
+          values$linRegress.models <- c(paste(input$linRegress.fit.option, "1"), paste(input$linRegress.fit.option[1], "2"))
+        } else {
+          values$linRegress.models <- c(input$linRegress.fit.option, input$linRegress.fit.option2)
+        }
+      } else {
+        values$linRegress.models <- input$linRegress.fit.option
+      }
+      
+      names(fm) <- values$linRegress.models
+        
+      output$linRegress.results <- renderPrint({
+        values$linRegress.fm <- fm
+        
+        values$linRegress.fit <- fm[[1]]
+        
+        print(summary(values$linRegress.fm))
+        
+        values$linRegress.num.fits <- length(fm)
+          
+        if (values$linRegress.num.fits == 2) {
+          values$linRegress.fit2 <- fm[[2]]
+        }
+      })
     }
     
-    names(fm) <- values$linRegress.models
-      
-    output$linRegress.results <- renderPrint({
-      values$linRegress.fm <- fm
-      
-      values$linRegress.fit <- fm[[1]]
-      
-      print(summary(values$linRegress.fm))
-      
-      values$linRegress.num.fits <- length(fm)
-        
-      if (values$linRegress.num.fits == 2) {
-        values$linRegress.fit2 <- fm[[2]]
-      }
-    })
   })
   
   invalid_response <- eventReactive(input$linRegress.display, {
@@ -770,18 +814,18 @@ shinyServer(function(input, output) {
   
   ## Plotting ##
   
-  output$extreme.points <- renderUI({
-    if (is.null(dim(values$dat))) {
-      return("")
-    }
-    
-    num.obs <- nrow(values$dat)
-    
-    numericInput("num.extreme.points",
-                 "Number of Extreme Points to Identify",
-                 value = 0,
-                 max = num.obs)
-  })
+  # output$extreme.points <- renderUI({
+  #   if (is.null(dim(values$dat))) {
+  #     return("")
+  #   }
+  #   
+  #   num.obs <- nrow(values$dat)
+  #   
+  #   numericInput("num.extreme.points",
+  #                "Number of Extreme Points to Identify",
+  #                value = 0,
+  #                max = num.obs)
+  # })
   
   observeEvent(input$linRegress.display.plots, {
     values$linRegress.plots.active <- T
@@ -814,7 +858,7 @@ shinyServer(function(input, output) {
                       ggtitle(title.name) +
                       xlab("Fitted Values") +
                       ylab("Residuals") +
-                      geom_point() +
+                      geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                       geom_hline(yintercept = c(-2.5 * sigma, 0, 2.5 * sigma),
                                  linetype = 2)
       
@@ -839,7 +883,7 @@ shinyServer(function(input, output) {
                       ggtitle(title.name) +
                       xlab("Fitted Values") +
                       ylab("Response") +
-                      geom_point()
+                      geom_point(color = "dodgerblue2", shape = 18, size = 2)
 
       if (input$include.rugplot == T) {
         plots[[i]] <- plots[[i]] + geom_rug()
@@ -882,10 +926,10 @@ shinyServer(function(input, output) {
                         ggtitle(title.name) +
                         xlab("Normal Quantiles") +
                         ylab("Ordered Residuals") +
-                        geom_point() +
+                        geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                         geom_abline(slope = slope, intercept = int) +
                         geom_ribbon(aes(ymin = lower, ymax = upper),
-                                    alpha = 0.2)
+                                    alpha = 0.2, color = "dodgerblue2", fill = "dodgerblue2")
       } else {
         plots[[i]] <- ggplot(data = dat, aes(sample = Res)) +
                         ggtitle(title.name) +
@@ -925,7 +969,7 @@ shinyServer(function(input, output) {
                          ggtitle(title.name) +
                          xlab("Distances") +
                          ylab("Standardized Residuals") +
-                         geom_point() +
+                         geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                          geom_hline(yintercept = c(-2.5, 0, 2.5),
                                     linetype = 2) +
                          geom_vline(xintercept = chi,
@@ -943,7 +987,7 @@ shinyServer(function(input, output) {
                          ggtitle(title.name) +
                          xlab("Robust Distances") +
                          ylab("Robustly Standardized Residuals") +
-                         geom_point() +
+                         geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                          geom_hline(yintercept = c(-2.5, 0, 2.5),
                                     linetype = 2) +
                          geom_vline(xintercept = chi,
@@ -968,8 +1012,8 @@ shinyServer(function(input, output) {
                                      color = 'black',
                                      bins  = 35) +
                       geom_density(aes(x = Res),
-                                   color = 'blue',
-                                   fill  = 'blue',
+                                   color = 'dodgerblue2',
+                                   fill  = 'dodgerblue2',
                                    alpha = 0.1)
       
       if (input$include.rugplot == T) {
@@ -997,7 +1041,7 @@ shinyServer(function(input, output) {
         plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
                         ggtitle(title.name) +
                         ylab("Standardized Residuals") +
-                        geom_point() +
+                        geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                         geom_line()
       } else {
         st.residuals <- fit$residuals / fit$scale
@@ -1007,7 +1051,7 @@ shinyServer(function(input, output) {
         plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
                         ggtitle(title.name) +
                         ylab("Robustly Standardized Residuals") +
-                        geom_point() +
+                        geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                         geom_line()
       }
     }
@@ -1041,7 +1085,7 @@ shinyServer(function(input, output) {
                  ggtitle(title.name) +
                  xlab("Fitted Values") +
                  ylab("Residuals") +
-                 geom_point() +
+                 geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                  geom_hline(yintercept = c(-2.5 * sigma, 0, 2.5 * sigma),
                             linetype = 2)
         
@@ -1077,7 +1121,7 @@ shinyServer(function(input, output) {
                  ggtitle(title.name) +
                  xlab("Fitted Values") +
                  ylab("Response") +
-                 geom_point()
+                 geom_point(color = "dodgerblue2", shape = 18, size = 2)
   
         if (input$include.rugplot == T) {
           plt <- plt + geom_rug()
@@ -1131,10 +1175,10 @@ shinyServer(function(input, output) {
                    ggtitle(title.name) +
                    xlab("Normal Quantiles") +
                    ylab("Ordered Residuals") +
-                   geom_point() +
+                   geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                    geom_abline(slope = slope, intercept = int) +
                    geom_ribbon(aes(ymin = lower, ymax = upper),
-                               alpha = 0.2)
+                               alpha = 0.2, color = "dodgerblue2", fill = "dodgerblue2")
         } else {
           plt <- ggplot(data = dat, aes(sample = Res)) +
                    ggtitle(title.name) +
@@ -1190,7 +1234,7 @@ shinyServer(function(input, output) {
                    ggtitle(title.name) +
                    xlab("Distances") +
                    ylab("Standardized Residuals") +
-                   geom_point() +
+                   geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                    geom_hline(yintercept = c(-2.5, 0, 2.5),
                               linetype = 2) + 
                    geom_vline(xintercept = chi,
@@ -1208,7 +1252,7 @@ shinyServer(function(input, output) {
                    ggtitle(title.name) +
                    xlab("Robust Distances") +
                    ylab("Robustly Standardized Residuals") +
-                   geom_point() +
+                   geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                    geom_hline(yintercept = c(-2.5, 0, 2.5),
                               linetype = 2) + 
                    geom_vline(xintercept = chi,
@@ -1249,8 +1293,8 @@ shinyServer(function(input, output) {
                                 color = 'black',
                                 bins  = 35) +
                  geom_density(aes(x = Res),
-                              color = 'blue',
-                              fill  = 'blue',
+                              color = 'dodgerblue2',
+                              fill  = 'dodgerblue2',
                               alpha = 0.1)
         
         if (input$include.rugplot == T) {
@@ -1296,7 +1340,7 @@ shinyServer(function(input, output) {
           plt <- ggplot(data = dat, aes(x = X, y = Y)) + 
                    ggtitle(title.name) +
                    ylab("Standardized Residuals") +
-                   geom_point() +
+                   geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                    geom_line()
         } else {
           st.residuals <- fit2$residuals / fit2$scale
@@ -1306,7 +1350,7 @@ shinyServer(function(input, output) {
           plt <- ggplot(data = dat, aes(x = X, y = Y)) + 
                    ggtitle(title.name) +
                    ylab("Robustly Standardized Residuals") +
-                   geom_point() +
+                   geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                    geom_line()
         }
         
@@ -1353,7 +1397,7 @@ shinyServer(function(input, output) {
                  ggtitle(title.name) +
                  xlab(names[2]) +
                  ylab(names[1]) +
-                 geom_point(data = mat, aes(x = X, y = Y)) +
+                 geom_point(data = mat, aes(x = X, y = Y), color = "dodgerblue2", shape = 18, size = 2) +
                  geom_abline(data = line.dat, aes(slope = slope, intercept = int, linetype = method, color = method), size = 1, show.legend = T) +
                  scale_color_manual(values = c("red", "black")) +
                  scale_linetype_manual(values = c("dashed", "solid"))
@@ -1765,16 +1809,17 @@ shinyServer(function(input, output) {
         
         indx <- rep(as.integer(1:n), 2)
         
-        type <- c(rep("Classic", n), rep("Robust", n))
+        Method <- c(rep("Classic", n), rep("Robust", n))
         
-        dat <- data.frame(indx, eigen.vals, type)
+        dat <- data.frame(indx, eigen.vals, Method)
         
         plt <- ggplot(data = dat) +
                  ggtitle("Eigenvalues") +
                  ylab("Eigenvalue") +
-                 geom_line(aes(x = indx, y = eigen.vals, color = type), size = 1) +
-                 geom_point(aes(x = indx, y = eigen.vals, color = type), shape = 5, size = 1) +
-                 scale_color_manual("Method", values = c("blue", "green")) +
+                 geom_line(aes(x = indx, y = eigen.vals, color = Method, linetype = Method), size = 1) +
+                 geom_point(aes(x = indx, y = eigen.vals, color = Method), shape = 16, size = 2) +
+                 scale_color_manual(values = c("red", "black")) +
+                 scale_linetype_manual(values = c("dashed", "solid")) +
                  scale_x_continuous(name = "Factor Number", breaks = min(dat$indx):max(dat$indx))
        
         plots[[i]] <- ggplotGrob(plt)
@@ -1802,7 +1847,7 @@ shinyServer(function(input, output) {
                 ggtitle("Classic") +
                 xlab("Index") +
                 ylab("Mahalanobis Distance") +
-                geom_point(color = "dodgerblue2", shape = 18) +
+                geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                 geom_hline(yintercept = thresh[1], linetype = 2)
         
         dat = data.frame(indx = indx[[2]], MD = md[[2]])
@@ -1811,7 +1856,7 @@ shinyServer(function(input, output) {
                 ggtitle("Robust") +
                 xlab("Index") +
                 ylab("Mahalanobis Distance") +
-                geom_point(color = "dodgerblue2", shape = 18) +
+                geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                 geom_hline(yintercept = thresh[2], linetype = 2)
         
         y.min <- min(layer_scales(p1)$y$range$range, layer_scales(p2)$y$range$range)
@@ -2043,7 +2088,7 @@ shinyServer(function(input, output) {
                 ggtitle("Classic") +
                 xlab("Chi-Squared Quantiles") +
                 ylab("Sorted Distances") +
-                geom_point(color = "dodgerblue2", shape = 18) +
+                geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                 geom_abline(slope = 1, intercept = 0, linetype = 2)
         
         dat <- data.frame(x = chisq.points, y = sort(md[[2]]))
@@ -2052,14 +2097,10 @@ shinyServer(function(input, output) {
                 ggtitle("Robust") +
                 xlab("Chi-Squared Quantiles") +
                 ylab("Sorted Distances") +
-                geom_point(color = "dodgerblue2", shape = 18) +
+                geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                 geom_abline(slope = 1, intercept = 0, linetype = 2)
         
         plots[[i]] <- cbind(ggplotGrob(p1), ggplotGrob(p2), size = "last")
-      }
-      
-      if (input$covariance.image.display == T) {
-        
       }
       
       if (input$covariance.dist.dist == T) {
@@ -2088,7 +2129,7 @@ shinyServer(function(input, output) {
                  xlim(c(min.val, max.val)) +
                  ylim(c(min.val, max.val)) +
                  theme(aspect.ratio = 1) +
-                 geom_point(color = "dodgerblue2", shape = 18) +
+                 geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                  geom_hline(yintercept = thresh[1], linetype = 2) +
                  geom_vline(xintercept = thresh[1], linetype = 2) +
                  geom_abline(aes(slope = 1, intercept = 0), linetype = 2)
@@ -2114,7 +2155,7 @@ shinyServer(function(input, output) {
                  ggtitle("Eigenvalues") +
                  ylab("Eigenvalue") +
                  geom_line(aes(x = indx, y = eigen.vals), color = "dodgerblue2", size = 1) +
-                 geom_point(aes(x = indx, y = eigen.vals), color = "dodgerblue2", shape = 5, size = 1) +
+                 geom_point(aes(x = indx, y = eigen.vals), color = "dodgerblue2", shape = 5, size = 2) +
                  scale_x_continuous(name = "Factor Number", breaks = min(dat$indx):max(dat$indx))
        
         plots[[i]] <- ggplotGrob(plt)
@@ -2145,7 +2186,7 @@ shinyServer(function(input, output) {
                  ggtitle(title.name) +
                  xlab("Index") +
                  ylab("Mahalanobis Distance") +
-                 geom_point(color = "dodgerblue2", shape = 18) +
+                 geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                  geom_hline(yintercept = thresh[1], linetype = 2)
         
         plots[[i]] <- ggplotGrob(plt)
@@ -2308,9 +2349,8 @@ shinyServer(function(input, output) {
         
         plots[[i]] <- ggplotGrob(plt)
       }
-    }
-    
-    if (input$covariance.chi.qqplot == T) {
+      
+      if (input$covariance.chi.qqplot == T) {
         i <- i + 1
         
         md <- lapply(fm,
@@ -2327,9 +2367,11 @@ shinyServer(function(input, output) {
                 ggtitle("Classic") +
                 xlab("Chi-Squared Quantiles") +
                 ylab("Sorted Distances") +
-                geom_point(color = "dodgerblue2", shape = 18) +
+                geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                 geom_abline(slope = 1, intercept = 0, linetype = 2)
+      }
     }
+    
     
     if (i == 0) {
       output$covariance.plot.ui <- renderUI({

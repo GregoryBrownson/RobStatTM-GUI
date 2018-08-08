@@ -188,11 +188,11 @@ princompRob <- function(data, est = "Auto", center = T, scale = F, ...) {
   
   z <- list()
   
-  z$center   <- X$center
   z$sdev     <- sqrt(X.eigen$values)
   z$rotation <- X.eigen$vectors
-  z$x        <- X.scaled %*% X.eigen$vectors
+  z$center   <- X$center
   z$scale    <- ifelse(scale, attr(X.scales, "scaled:scale"), FALSE)
+  z$x        <- X.scaled %*% X.eigen$vectors
   
   class(z) <- "princompRob"
   
@@ -226,7 +226,8 @@ if (is.null(fit.models:::e$fmreg$pcompfm)) {
 }
 
 summary.pcompfm <- function(object, ...) {
-  object <- lapply(object, summary, ...)
+  object$Classic <- summary(object$Classic)
+  object$Robust  <- summary(object$Robust) 
   oldClass(object) <- "summary.pcompfm"
   object
 }
@@ -237,33 +238,33 @@ print.summary.pcompfm <- function(x,
                                   ...) {
   n <- ncol(x[[1]]$rotation)
   
-  components <- lapply(x, function(u) formatC(signif(u$rotation, 2), format = "e", digits = 2))
-  components[[1]] <- sapply(components[[1]], function(u) {
-                              if(u < 0.0) {
-                                as.character(u)
-                              } else {
-                                paste0(" ", u)
-                              }
-                            })
-  components[[2]] <- sapply(components[[2]], function(u) {
-                              if(u < 0.0) {
-                                paste0('(', u, ')')
-                              } else {
-                                paste0("( ", u, ')')
-                              }
-                            })
-  components <- paste(components[[1]], components[[2]])
-  
-  components <- noquote(matrix(components, ncol = n))
-  
-  pc.index <- sapply(1:n, function(i) paste("PC", i))
-  
-  pc.index <- format(pc.index, width = max(nchar(components)), justify = "centre")
-  
-  dimnames(components) <- list(rep("Classic (Robust)", n), pc.index)
-  
-  cat("Comparison of Principal Components:\n")
-  print(components, ...)
+  # components <- lapply(x, function(u) formatC(signif(u$rotation, 2), format = "e", digits = 2))
+  # components[[1]] <- sapply(components[[1]], function(u) {
+  #                             if(u < 0.0) {
+  #                               as.character(u)
+  #                             } else {
+  #                               paste0(" ", u)
+  #                             }
+  #                           })
+  # components[[2]] <- sapply(components[[2]], function(u) {
+  #                             if(u < 0.0) {
+  #                               paste0('(', u, ')')
+  #                             } else {
+  #                               paste0("( ", u, ')')
+  #                             }
+  #                           })
+  # components <- paste(components[[1]], components[[2]])
+  # 
+  # components <- noquote(matrix(components, ncol = n))
+  # 
+  # pc.index <- sapply(1:n, function(i) paste("PC", i))
+  # 
+  # pc.index <- format(pc.index, width = max(nchar(components)), justify = "centre")
+  # 
+  # dimnames(components) <- list(rep("Classic (Robust)", n), pc.index)
+  # 
+  # cat("Comparison of Principal Components:\n")
+  # print(components, ...)
   
   pc.index <- sapply(1:n, function(i) paste("PC", i))
   
@@ -291,8 +292,11 @@ shinyServer(function(input, output) {
   
   values$linRegress.active <- F
   values$covariance.active <- F
+  values$pca.active        <- F
+  
   values$linRegress.plots.active <- F
   values$covariance.plots.active <- F
+  values$pca.plots.active        <- F
   
   
 ####################  
@@ -407,7 +411,7 @@ shinyServer(function(input, output) {
   # On-click, find the estimators and create string object of results
   contents_estimators <- eventReactive(input$display.Location, {
     if (is.null(dim(values$dat))) {
-      return("ERROR: No data. Please upload a data set or select one from the available libraries.")
+        return(paste0("<font color=\"#FF0000\"><b>", "ERROR: No data loaded!", "</b><font>"))
     }
     
     # Get values for location and scale using 'MLocDis' function from
@@ -699,7 +703,7 @@ shinyServer(function(input, output) {
       })
       
       output$linRegress.results <- renderText({
-        return(paste0("<font color=\"#FF0000\"><b>", "ERROR: No data loaded", "</b><font>"))
+        return(paste0("<font color=\"#FF0000\"><b>", "ERROR: No data loaded!", "</b><font>"))
       })
     } else if (any(is.null(input$linRegress.independent) || is.null(input$linRegress.dependent))) {
       output$linRegress.results.ui <- renderUI({
@@ -707,7 +711,7 @@ shinyServer(function(input, output) {
       })
       
       output$linRegress.results <- renderText({
-        return(paste0("<font color=\"#FF0000\"><b>", "ERROR: Missing dependent or independent variables", "</b><font>"))
+        return(paste0("<font color=\"#FF0000\"><b>", "ERROR: Missing independent variables! Please add at least one.", "</b><font>"))
       })
     } else if (!is.numeric(values$dat[, input$linRegress.dependent])) {
       output$linRegress.results.ui <- renderUI({
@@ -801,7 +805,6 @@ shinyServer(function(input, output) {
         }
       })
     }
-    
   })
   
   invalid_response <- eventReactive(input$linRegress.display, {
@@ -1718,74 +1721,94 @@ shinyServer(function(input, output) {
   })
   
   observeEvent(input$covariance.display, {
-    if (is.null(dim(values$dat))) {
-      output$covariance.results <- renderPrint({
-        cat("ERROR: No Data loaded")
+    if (is.null(values$dat)) {
+      output$covariance.results.ui <- renderUI({
+        htmlOutput("covariance.results")
+      })
+      
+      output$covariance.results <- renderText({
+        return(paste0("<font color=\"#FF0000\"><b>", "ERROR: No data loaded!", "</b><font>"))
       })
     } else if (is.null(input$covariance.variables)) {
-      output$covariance.results <- renderPrint({
-        cat("ERROR: Missing variables")
+      output$covariance.results.ui <- renderUI({
+        htmlOutput("covariance.results")
       })
-    } 
-    
-    values$covariance.active <- TRUE
-    
-    corr <- FALSE
-    
-    if (input$covariance.type == "corr") {
-      corr <- TRUE
-    }
-    
-    data <- values$dat[, input$covariance.variables]
-    
-    if (input$covariance.method == "classic") {
-      values$covariance.num <- 1
       
+      output$covariance.results <- renderText({
+        return(paste0("<font color=\"#FF0000\"><b>", "ERROR: Missing variables! Please input at least 2 variables.", "</b><font>"))
+      })
+    } else if (length(input$covariance.variables) == 1) {
+      output$covariance.results.ui <- renderUI({
+        htmlOutput("covariance.results")
+      })
       
-      values$covariance.fit <- covClassic(data,
+      output$covariance.results <- renderText({
+        return(paste0("<font color=\"#FF0000\"><b>", "ERROR: Insufficient number of variables! Please add more.", "</b><font>"))
+      })
+    } else {
+      output$covariance.results.ui <- renderUI({
+        verbatimTextOutput("covariance.results")
+      })
+      
+      values$covariance.active <- TRUE
+    
+      corr <- FALSE
+      
+      if (input$covariance.type == "corr") {
+        corr <- TRUE
+      }
+      
+      data <- values$dat[, input$covariance.variables]
+      
+      if (input$covariance.method == "classic") {
+        values$covariance.num <- 1
+        
+        
+        values$covariance.fit <- covClassic(data,
+                                            data.name = input$dataset,
+                                            corr = corr)
+      } else if (input$covariance.method == "rob") {
+        values$covariance.num <- 1
+        
+        if (input$covariance.estimator == "MM") {
+          values$covariance.fit <- covRobMM.temp(data,
+                                                 data.name = input$dataset,
+                                                 corr = corr)
+        } else if (input$covariance.estimator == "Rocke") {
+          values$covariance.fit <- covRobRocke.temp(data,
+                                                    data.name = input$dataset,
+                                                    corr = corr)
+        } else {
+          values$covariance.fit <- covRob(data,
                                           data.name = input$dataset,
                                           corr = corr)
-    } else if (input$covariance.method == "rob") {
-      values$covariance.num <- 1
-      
-      if (input$covariance.estimator == "MM") {
-        values$covariance.fit <- covRobMM.temp(data,
-                                               data.name = input$dataset,
-                                               corr = corr)
-      } else if (input$covariance.estimator == "Rocke") {
-        values$covariance.fit <- covRobRocke.temp(data,
-                                                  data.name = input$dataset,
-                                                  corr = corr)
+        }
       } else {
-        values$covariance.fit <- covRob(data,
-                                        data.name = input$dataset,
-                                        corr = corr)
+        values$covariance.num <- 2
+        
+        if (input$covariance.estimator == "MM") {
+          values$covariance.fit <- fit.models(c(Classic = "covClassic", Robust = "covRobMM"),
+                                              data = data,
+                                              data.name = input$dataset,
+                                              corr = corr)
+        } else if (input$covariance.estimator == "Rocke") {
+          values$covariance.fit <- fit.models(c(Classic = "covClassic", Robust = "covRobRocke"),
+                                              data = data,
+                                              data.name = input$dataset,
+                                              corr = corr)
+        } else {
+          values$covariance.fit <- fit.models(c(Classic = "covClassic", Robust = "covRob"),
+                                              data = data,
+                                              data.name = input$dataset,
+                                              corr = corr)
+        }
       }
-    } else {
-      values$covariance.num <- 2
       
-      if (input$covariance.estimator == "MM") {
-        values$covariance.fit <- fit.models(c(Classic = "covClassic", Robust = "covRobMM"),
-                                            data = data,
-                                            data.name = input$dataset,
-                                            corr = corr)
-      } else if (input$covariance.estimator == "Rocke") {
-        values$covariance.fit <- fit.models(c(Classic = "covClassic", Robust = "covRobRocke"),
-                                            data = data,
-                                            data.name = input$dataset,
-                                            corr = corr)
-      } else {
-        values$covariance.fit <- fit.models(c(Classic = "covClassic", Robust = "covRob"),
-                                            data = data,
-                                            data.name = input$dataset,
-                                            corr = corr)
-      }
+      # Print summary method for covariance results
+      output$covariance.results <- renderPrint({
+        print(summary(values$covariance.fit))
+      })
     }
-    
-    # Print summary method for covariance results
-    output$covariance.results <- renderPrint({
-      print(summary(values$covariance.fit))
-    })
   })
   
   observeEvent(input$covariance.display.plots, {
@@ -2535,45 +2558,67 @@ shinyServer(function(input, output) {
   })
   
   observeEvent(input$pca.display, {
-    if (is.null(dim(values$dat))) {
-      output$pca.results <- renderPrint({
-        cat("ERROR: No Data loaded")
+    if (is.null(values$dat)) {
+      output$pca.results.ui <- renderUI({
+        htmlOutput("pca.results")
+      })
+      
+      output$pca.results <- renderText({
+        return(paste0("<font color=\"#FF0000\"><b>", "ERROR: No data loaded!", "</b><font>"))
       })
     } else if (is.null(input$pca.variables)) {
-      output$pca.results <- renderPrint({
-        cat("ERROR: Missing variables")
+      output$pca.results.ui <- renderUI({
+        htmlOutput("pca.results")
       })
-    } 
-    
-    data <- values$dat.numeric[, input$pca.variables]
-    
-    if (input$pca.method == "classic") {
-      values$pca.num <- 1
       
-      values$pca.fit <- prcomp(data)
-    } else if (input$pca.method == "rob") {
-      values$pca.num <- 1
+      output$pca.results <- renderText({
+        return(paste0("<font color=\"#FF0000\"><b>", "ERROR: Missing variables! Please input at least 2 variables.", "</b><font>"))
+      })
+    } else if (length(input$pca.variables) == 1) {
+      output$pca.results.ui <- renderUI({
+        htmlOutput("pca.results")
+      })
       
-      values$pca.fit <- princompRob(data,
-                                    est = input$pca.estimator)
+      output$pca.results <- renderText({
+        return(paste0("<font color=\"#FF0000\"><b>", "ERROR: Insufficient number of variables! Please add more.", "</b><font>"))
+      })
     } else {
-      values$pca.num <- 2
+      output$pca.results.ui <- renderUI({
+        verbatimTextOutput("pca.results")
+      })
       
-      values$pca.fit <- fit.models(Classic = prcomp(data),
-                                   Robust  = princompRob(data,
-                                                         est = input$pca.estimator))
-    }
+      values$pca.active <- TRUE
+      
+      data <- values$dat.numeric[, input$pca.variables]
     
-    # Print summary method for pca results
-    output$pca.results <- renderPrint({
-      print(summary(values$pca.fit))
-    })
+      if (input$pca.method == "classic") {
+        values$pca.num <- 1
+        
+        values$pca.fit <- prcomp(data)
+      } else if (input$pca.method == "rob") {
+        values$pca.num <- 1
+        
+        values$pca.fit <- princompRob(data,
+                                      est = input$pca.estimator)
+      } else {
+        values$pca.num <- 2
+        
+        values$pca.fit <- fit.models(Classic = prcomp(data),
+                                     Robust  = princompRob(data,
+                                                           est = input$pca.estimator))
+      }
+      
+      # Print summary method for pca results
+      output$pca.results <- renderPrint({
+        print(summary(values$pca.fit))
+      })
+    }
   })
   
   # Reset all windows once new data set is loaded
   observeEvent(input$display.table, {
     if (values$linRegress.active) {
-      output$linRegress.results <- renderPrint({ invisible() })
+      output$linRegress.results.ui <- renderUI({ invisible() })
       
       values$linRegress.active <- FALSE
       
@@ -2585,7 +2630,7 @@ shinyServer(function(input, output) {
     }
     
     if (values$covariance.active) {
-      output$covariance.results <- renderPrint({ invisible() })
+      output$covariance.results.ui <- renderUI({ invisible() })
       
       values$covariance.active <- FALSE
       
@@ -2596,11 +2641,26 @@ shinyServer(function(input, output) {
       }
     }
     
+    if (values$pca.active) {
+      output$pca.results.ui <- renderUI({ invisible() })
+      
+      values$pca.active <- FALSE
+      
+      if (values$pca.plots.active) {
+        output$pca.plot.ui <- renderUI({ invisible() })
+        
+        values$pca.plots.active <- FALSE
+      }
+    }
+    
     updateTabsetPanel(session  = getDefaultReactiveDomain(), "linear.tabs",
                       selected = "linear.model")
     
     updateTabsetPanel(session  = getDefaultReactiveDomain(), "covariance.tabs",
                       selected = "covariance.est")
+    
+    updateTabsetPanel(session  = getDefaultReactiveDomain(), "pca.tabs",
+                      selected = "pca.est")
   })
   
   # Reset plotting window for linear regression
@@ -2619,4 +2679,18 @@ shinyServer(function(input, output) {
       values$covariance.plots.active <- FALSE
     }
   })
+  
+  output$about.text <- renderText({"
+    <div>
+      <font color=\"#000000\"> Text for this section to be added on a later date. </font>
+    </div>
+  "})
+  
+  output$help.text <- renderText({"
+    <div>
+      <font color=\"#000000\"> Please contact <a href=\"mailto:gsb25@uw.edu\">Greg Brownson</a>
+        for any questions about the application. Any comments or suggestions to improve on the
+        <strong>RobStatTM</strong> shiny interface are encouraged as well!</font>
+    </div>
+  "})
 })

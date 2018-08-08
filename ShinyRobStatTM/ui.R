@@ -139,7 +139,8 @@ shinyUI(navbarPage("RobStatTM",
   # Tab for Location/Dispersion
   tabPanel("Location-Scale",
     h3("Location-Scale"),
-    helpText("Description Here"),
+    helpText("Calculate the robust location and scale for a single variable in
+             a data set."),
     
     sidebarLayout(
       sidebarPanel(
@@ -188,7 +189,9 @@ shinyUI(navbarPage("RobStatTM",
     ## Linear Regression ##
     tabPanel("Robust Linear Regression",
     h3("Robust Linear Regression"),
-    helpText("Description Here"),
+    helpText("Calculate the robust coefficients of several factors using any robust
+             method andcompare to another robust regression or the least-squares
+             equivalent."),
       tabsetPanel(id = "linear.tabs", type = "tabs",
                   
         # Model selection
@@ -251,7 +254,6 @@ shinyUI(navbarPage("RobStatTM",
             mainPanel(
               tags$head(tags$style(HTML(CSS.format1))),
               
-              htmlOutput("linRegress.plot.err"),
               uiOutput("linRegress.plot.ui")
             )
           )
@@ -261,7 +263,7 @@ shinyUI(navbarPage("RobStatTM",
     
     tabPanel("Robust Covariance",
       h3("Robust Covariance"),
-      helpText("Description Here"),
+      helpText("Compute estimates for multivariate location and scale using classical and/or robust methods."),
       tabsetPanel(id = "covariance.tabs", type = "tabs",
         tabPanel(title = "Estimates", value = "covariance.est",
           sidebarLayout(
@@ -290,7 +292,7 @@ shinyUI(navbarPage("RobStatTM",
             mainPanel(
               tags$head(tags$style(HTML(CSS.format1))),
               
-              verbatimTextOutput("covariance.results")
+              uiOutput("covariance.results.ui")
             )
           )
         ),
@@ -334,8 +336,8 @@ shinyUI(navbarPage("RobStatTM",
     ),
     
     tabPanel("Robust PCA",
-      h3("RObust Principle Component Analysis"),
-      helpText("Description Here"),
+      h3("Robust Principle Component Analysis"),
+      helpText("Principal component analysis using classical and/or robust methods."),
       tabsetPanel(id = "pca.tabs", type = "tabs",
         tabPanel(title = "Estimates", value = "pca.est",
           sidebarLayout(
@@ -364,27 +366,29 @@ shinyUI(navbarPage("RobStatTM",
             mainPanel(
               tags$head(tags$style(HTML(CSS.format1))),
               
-              verbatimTextOutput("pca.results")
+              uiOutput("pca.results.ui")
             )
           )
         ),
         
-         tabPanel("Plots",
-          sidebarLayout(
-            sidebarPanel(
-              tags$head(tags$style(HTML(CSS.format1))),
-              h4("Plots"),
-              checkboxInput("pca.scatter", "Scatter Plots", TRUE),
-              checkboxInput("pca.loadings", "Loadings", TRUE),
-              checkboxInput("pca.scree", "Screeplot", TRUE),
+        disabled(
+          tabPanel("Plots",
+            sidebarLayout(
+              sidebarPanel(
+                tags$head(tags$style(HTML(CSS.format1))),
+                h4("Plots"),
+                checkboxInput("pca.scatter", "Scatter Plots", TRUE),
+                checkboxInput("pca.loadings", "Loadings", TRUE),
+                checkboxInput("pca.scree", "Screeplot", TRUE),
+                
+                actionButton("pca.display.plots", "View Plots")
+              ),
               
-              actionButton("pca.display.plots", "View Plots")
-            ),
-            
-            mainPanel(
-              tags$head(tags$style(HTML(CSS.format1))),
-              
-              uiOutput("pca.plot.ui")
+              mainPanel(
+                tags$head(tags$style(HTML(CSS.format1))),
+                
+                uiOutput("pca.plot.ui")
+              )
             )
           )
         )
@@ -392,7 +396,11 @@ shinyUI(navbarPage("RobStatTM",
     )
   ),
   
-  tabPanel("About"),
+  tabPanel("About",
+    htmlOutput("about.text")
+  ),
   
-  tabPanel("Help")
+  tabPanel("Help",
+    htmlOutput("help.text")
+  )
 ))

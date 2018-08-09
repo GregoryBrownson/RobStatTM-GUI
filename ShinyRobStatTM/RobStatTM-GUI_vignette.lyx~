@@ -1,0 +1,314 @@
+#LyX 2.3 created this file. For more info see http://www.lyx.org/
+\lyxformat 544
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass article
+\begin_preamble
+%%%%%%%%%%%%%%%%%%%% book.tex %%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+% sample root file for the chapters of your "monograph"
+%
+% Use this file as a template for your own input.
+%
+%%%%%%%%%%%%%%%% Springer-Verlag %%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+% RECOMMENDED %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+% choose options for [] as required from the list
+% in the Reference Guide
+
+
+\usepackage[bottom]{footmisc}% places footnotes at page bottom
+
+% see the list of further useful packages
+% in the Reference Guide
+
+
+%\usepackage[style=authoryear,natbib=true,firstinits=true,backend=biber]{biblatex}
+%\addbibresource{C:/Rprojects/bookportopt/msybook.bib}
+
+%\renewcommand*{\nameyeardelim}{\addspace}
+%\renewbibmacro{in:}{}
+
+\usepackage{txfonts}
+\usepackage{upgreek}
+\end_preamble
+\use_default_options true
+\begin_modules
+theorems-ams
+knitr
+\end_modules
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\use_microtype false
+\use_dash_ligatures true
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\float_placement H
+\paperfontsize default
+\spacing onehalf
+\use_hyperref false
+\papersize default
+\use_geometry true
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 1
+\use_minted 0
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 1in
+\topmargin 1in
+\rightmargin 1in
+\bottommargin 1in
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation skip
+\defskip smallskip
+\is_math_indent 0
+\math_numbering_side default
+\quotes_style english
+\dynamic_quotes 0
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Title
+Shiny Interface to the RobStatTM Library
+\end_layout
+
+\begin_layout Author
+Gregory Brownson
+\end_layout
+
+\begin_layout Abstract
+This Report displays the use of the Shiny User Interface to the RobStatTM
+ R package implemented during the 2018 Google Summer of Code (GSoC).
+ GSoC funding was awarded to UW AMath MS-CFRM student Gregory Brownson as
+ project lead, with Doug Martin and Matias Salibian-Barrera as mentors for
+ the project.
+\end_layout
+
+\begin_layout Section
+Loading Data
+\end_layout
+
+\begin_layout Standard
+The user may load data from an existing R package or upload a csv file to
+ the application by selecting either option and specifying the inputs.
+ Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "dat1"
+plural "false"
+caps "false"
+noprefix "false"
+
+\end_inset
+
+ shows the options for loading a data set from an R package.
+ Once a user selects a package from the list under 
+\series bold
+Library Name
+\series default
+, the 
+\series bold
+Select Dataset
+\series default
+ input is populated by existing names of datasets in that package.
+ After selecting a dataset, the user should click on the 
+\series bold
+Load Data
+\series default
+ button to load the data into the application for further analysis.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\noindent
+\align center
+\begin_inset Graphics
+	filename Data1.png
+	scale 60
+	rotateOrigin center
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+Interface to load a data set from an existing R package
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "dat1"
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Figure 
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "dat2"
+plural "false"
+caps "false"
+noprefix "false"
+
+\end_inset
+
+ shows the options for uploading a csv file to the application.
+ The user must specify whether some of the specific formats of the file
+ and also has the option to identify whether the data should be read as
+ a time series or not.
+ In the example, the file 
+\series bold
+hfunds.ts.csv
+\series default
+ was uploaded as a time series.
+ The window in the main (right) panel displays the data in a table like
+ format.
+ For datasets with a large number of variables, it is best to view the applicati
+on in 
+\series bold
+Full Screen
+\series default
+.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Float figure
+placement th
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\noindent
+\align center
+\begin_inset Graphics
+	filename Data_upload.png
+	scale 50
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+Interface to upload a csv file from a user's computer to the application.
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Plain Layout
+\begin_inset CommandInset label
+LatexCommand label
+name "dat2"
+
+\end_inset
+
+
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+Robust Location-Scale
+\end_layout
+
+\begin_layout Section
+Robust Linear Regression
+\end_layout
+
+\begin_layout Section
+Robust Covariance
+\end_layout
+
+\begin_layout Section
+Robust PCA
+\end_layout
+
+\begin_layout Section
+What's Next?
+\end_layout
+
+\end_body
+\end_document

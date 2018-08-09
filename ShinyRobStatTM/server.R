@@ -727,6 +727,7 @@ shinyServer(function(input, output) {
       })
       
       if (input$linRegress.second.method) {
+        
         methods <- c(input$linRegress.fit.option, input$linRegress.fit.option2)
         
         index <- match(methods, values$linRegress.methods)
@@ -761,7 +762,7 @@ shinyServer(function(input, output) {
         if (model[2] == "lm") {
           fit[[2]] <- do.call(model[2], list(as.formula(input$linRegress.formula.text2), data = values$dat))
         } else {
-          control2 <- lmrobdet.control(efficiency = input$linRegress.eff2,
+          control <- lmrobdet.control(efficiency = input$linRegress.eff2,
                                       family = input$linRegress.family2,
                                       compute.rd = T)
         
@@ -772,7 +773,16 @@ shinyServer(function(input, output) {
           
         fit[[2]]$call <- call(model[2], as.formula(input$linRegress.formula.text2))
         
-        fm <- fit.models(fit[[1]], fit[[2]])
+        
+        if (model[2] == "lm" && model[1] != "lm") {
+          model <- model[2:1]
+          
+          methods <- methods[2:1]
+          
+          fm <- fit.models(fit[[2]], fit[[1]])
+        } else {
+          fm <- fit.models(fit[[1]], fit[[2]])
+        }
       } else {
         fm <- fit.models(fit[[1]])
       }
@@ -783,7 +793,7 @@ shinyServer(function(input, output) {
         if (input$linRegress.fit.option == input$linRegress.fit.option2) {
           values$linRegress.models <- c(paste(input$linRegress.fit.option, "1"), paste(input$linRegress.fit.option[1], "2"))
         } else {
-          values$linRegress.models <- c(input$linRegress.fit.option, input$linRegress.fit.option2)
+          values$linRegress.models <- methods
         }
       } else {
         values$linRegress.models <- input$linRegress.fit.option

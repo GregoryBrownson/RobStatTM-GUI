@@ -12,7 +12,7 @@ Please see the [vignette](https://github.com/GregoryBrownson/RobStatTM-GUI/blob/
 
 ## To Do:
 
-[] Plotting methods for PCA
-[] Add robust logistic regression and robust time series analysis from Chapters 7 and 8 of RobStatTM book
-[] Re-write print.summary methods to output HTML
-[] Themes?
+- [ ] Plotting methods for PCA
+- [ ] Add robust logistic regression and robust time series analysis from Chapters 7 and 8 of RobStatTM book
+- [ ] Re-write print.summary methods to output HTML
+- [ ] Themes?

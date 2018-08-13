@@ -6,4 +6,4 @@ The Shiny UI may be run with the following command:
 Note: The **shiny** package must be installed to run the above.
 
 ## Documentation
-Please see the [vignette](https://github.com/GregoryBrownson/RobStatTM-GUI/blob/master/vignette/RobStatTM%20GUI_vignette.pdf)
+Please see the [vignette](https://github.com/GregoryBrownson/RobStatTM-GUI/blob/master/vignette/RobStatTM%20GUI_vignette.pdf) for more information about the Shiny UI and instructions on how to use it.

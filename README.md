@@ -1,5 +1,7 @@
 # Shiny User Interface (UI) to the RobStatTM R Package
 
+Welcome to the Github repository for the Shiny UI to **RobStatTM**. Below is some information on the UI, a link to documentation, and future tasks.
+
 ## How to Run the Shiny App
 The Shiny UI may be run with the following command:
 

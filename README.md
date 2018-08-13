@@ -2,7 +2,7 @@
 
 ## How to Run
 The Shiny UI may be run with the following command:
-  **shiny::runGitHub("RobStatTM-Gui", "GregoryBrownson", subdir = "ShinyRobStatTM")**
+  'shiny::runGitHub("RobStatTM-Gui", "GregoryBrownson", subdir = "ShinyRobStatTM")'
 Note: The **shiny** package must be installed to run the above.
 
 ## Documentation

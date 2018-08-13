@@ -1,11 +1,6 @@
-# RobStatTM-GUI
+# Shiny User Interface (UI) to the RobStatTM R Package
 
-## Package List
-* DT
-* ggplot2
-* grid
-* gridExtra
-* PerformanceAnalytics
-* RobStatTM
-* robustbase
-* shiny
+## How to Run
+The Shiny UI may be run with the following command:
+  **shiny::runGitHub("RobStatTM-Gui", "GregoryBrownson", subdir = "ShinyRobStatTM")**
+Note: The **shiny** package must be installed to run the above.

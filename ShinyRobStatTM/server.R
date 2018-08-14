@@ -7,7 +7,16 @@
 #              selecting location and scale
 #              parameters
 
-library(crayon)
+pkgs <- c("DT", "fit.models", "ggplot2", "grid", "gridExtra",
+          "PerformanceAnalytics", "robust", "robustbase", "shiny", "xts")
+
+missing.packages <- setdiff(pkgs, rownames(installed.packages()))
+if (length(missing.packages) > 0) {
+  cat(paste("The following packages are missing:", missing.packages, ".\n"))
+  cat("Installing missing packages!")
+  install.packages(missing.packages)
+}
+
 library(DT)
 library(fit.models)
 library(ggplot2)
@@ -24,6 +33,16 @@ thm <- theme_bw() +
        theme(plot.title = element_text(hjust = 0.5))
 
 theme_set(thm)
+
+locScaleClassic <- function(x) {
+  z <- list()
+  
+  z$disper <- sd(x)
+  z$mu <- mean(x)
+  z$std.mu <- sd(x) / sqrt(length(x))
+  
+  z
+}
 
 lm <- function(form, ...) {
   fit <- stats::lm(form, ...)
@@ -314,10 +333,12 @@ shinyServer(function(input, output) {
     # List of datasets
     lst <- data(package = input$library)
     
+    item.lst <- lst$results[, "Item"][grepl(" \\(", lst$results[, "Item"]) == FALSE]
+    
     # Create selection for datasets
     selectInput("dataset",
                 label   = "Select Dataset",
-                choices = lst$results[, "Item"])
+                choices = item.lst)
   })
   
   observeEvent(input$display.table, {
@@ -330,7 +351,10 @@ shinyServer(function(input, output) {
         
         fluidRow(
           column(2, offset = 5,
-            actionLink("data.info.link", label = "More Info")
+            disabled(
+              
+              actionLink("data.info.link", label = "More Info")
+            )
           )
         )
       )
@@ -353,7 +377,7 @@ shinyServer(function(input, output) {
                       quote  = input$quote)
       
       if (input$data.ts == TRUE) {
-        values$dat[, 1] <- as.Date(values$dat[, 1])
+        values$dat[, 1] <- as.Date(as.character(values$dat[, 1]))
         
         values$dat <- xts(values$dat[, -1], values$dat[, 1])
       }
@@ -374,22 +398,35 @@ shinyServer(function(input, output) {
       values$dat <- get(input$dataset)
     }
     
-    # Get variable names
-    values$dat.variables <- colnames(values$dat)
-    
-    num.index <- sapply(values$dat, is.numeric)
-    
-    values$dat.numeric <- values$dat[, num.index]
-    
-    values$dat.numeric.variables <- colnames(values$dat.numeric)
-    
-    data <- values$dat
-    
-    data[, num.index] <- round(data[, num.index], 3)
+    if (is.vector(values$dat)) {
+      data <- data.frame(values$dat)
+      
+      colnames(data) <- input$dataset
+      
+      values$dat <- data
+      
+      values$dat.numeric.variables <- colnames(values$dat)
+    } else {
+      # Get variable names
+      if (all(class(values$dat) == "zoo")) {
+        values$dat <- xts(values$dat)
+      }
+      
+      values$dat.variables <- colnames(values$dat)
+      
+      num.index <- sapply(values$dat, is.numeric)
+      
+      values$dat.numeric <- values$dat[, num.index]
+      
+      values$dat.numeric.variables <- colnames(values$dat.numeric)
+      
+      data <- values$dat
+      
+      data[, num.index] <- round(data[, num.index], 3)
+    }
     
     return (as.data.frame(data))
   })
-  
   
   
 ####################
@@ -397,47 +434,85 @@ shinyServer(function(input, output) {
 ####################
 
     # Render variable input list
-  output$select.variable <- renderUI({
+  output$locScale.select.variable <- renderUI({
     # If there is no data, do nothing
     if (is.null(dim(values$dat))) {
       return("")
     }
     
     # Render select input for variables
-    selectInput("variable", "Variable",
+    selectInput("locScale.variable", "Variable",
                 choices = values$dat.numeric.variables)
   })
   
   # On-click, find the estimators and create string object of results
-  contents_estimators <- eventReactive(input$display.Location, {
+  contents_estimators <- eventReactive(input$locScale.display, {
     if (is.null(dim(values$dat))) {
         return(paste0("<font color=\"#FF0000\"><b>", "ERROR: No data loaded!", "</b><font>"))
     }
     
-    # Get values for location and scale using 'MLocDis' function from
+    data <- as.numeric(values$dat[, input$locScale.variable])
+    
+    if (input$locScale.method == 'robust') {
+      est <- locScaleM(x     = data,
+                       psi   = input$locScale.psi,
+                       eff   = input$locScale.eff)
+      line1 <- paste0("<font color=\"#000000\">Location <strong>(SE)</strong>: ", round(est$mu, 4), " (<strong>", round(est$std.mu, 4), ")</strong><br>")
+      line2 <- paste0("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Scale: ", round(est$disper, 4),"</font>")
+
+      return(paste0("<div style=\"border: 1px solid #ccc;
+                                  border-radius: 6px;
+                                  padding: 0px 5px;
+                                  margin: 5px -10px;
+                                  background-color: #f5f5f5;\">",
+                      line1, line2,
+                    "</div>"))
+      
+    } else if (input$locScale.method == 'classic') {
+      est <- locScaleClassic(data)
+      
+      line1 <- paste0("<font color=\"#000000\">Location <strong>(SE)</strong>: ", round(est$mu, 4), " (<strong>", round(est$std.mu, 4), ")</strong><br>")
+      line2 <- paste0("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Scale: ", round(est$disper, 4),"</font>")
+
+      return(paste0("<div style=\"border: 1px solid #ccc;
+                                  border-radius: 6px;
+                                  padding: 0px 5px;
+                                  margin: 5px -10px;
+                                  background-color: #f5f5f5;\">",
+                      line1, line2,
+                    "</div>"))
+    } else {
+      est1 <- locScaleClassic(data)
+      
+      est2 <- locScaleM(x     = data,
+                        psi   = input$locScale.psi,
+                        eff   = input$locScale.eff)
+      
+      line1 <- paste0("<font color=\"#000000\">Comparison of Location <strong>(SE)</strong>:<br>Classical&emsp;",
+                      signif(est1$mu, 3), " (<strong>", signif(est1$std.mu, 3), ")</strong><br>Robust&nbsp;&nbsp;&nbsp;&emsp;",
+                      signif(est2$mu, 3), " (<strong>", signif(est2$std.mu, 3), ")</strong><br><br>")
+      line2 <- paste0("Comparison of Scale:<br> Classical&emsp;", signif(est1$disper, 3), "<br> Robust&nbsp;&nbsp;&nbsp;&emsp;", signif(est2$disper, 3), "</font>")
+
+      return(paste0("<div style=\"border: 1px solid #ccc;
+                                  border-radius: 6px;
+                                  padding: 0px 5px;
+                                  margin: 5px -10px;
+                                  background-color: #f5f5f5;\">",
+                    line1, line2,
+                    "</div>"))
+    }
+    
+    # Get values for location and scale using 'locscaleM' function from
     # 'RobStatTM' package
-    est <- MLocDis(x     = as.numeric(values$dat[, input$variable]),
-                   psi   = input$psi,
-                   eff   = input$efficiency,
-                   maxit = input$max.iter,
-                   tol   = input$tolerance)
+    
     
     # Store results in string objects
     
-    line1 <- paste0("<font color=\"#000000\">Location <strong>(SE)</strong>: ", round(est$mu, 4), " (<strong>", round(est$std.mu, 4), ")</strong><br>")
-    line2 <- paste0("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Dispersion: ", round(est$disper, 4),"</font>")
-
-    return(paste0("<div style=\"border: 1px solid #ccc;
-                                border-radius: 6px;
-                                padding: 0px 5px;
-                                margin: 5px -10px;
-                                background-color: #f5f5f5;\">",
-                    line1, line2,
-                  "</div>"))
+    
   })
   
   # Display output
-  output$results.Location <- renderText({
+  output$locScale.Results <- renderText({
     contents_estimators()
   })
   
@@ -664,35 +739,19 @@ shinyServer(function(input, output) {
   
   output$linRegress.robust.control2 <- renderUI({
     if (input$linRegress.fit.option2 != "LS") {
-      if (input$linRegress.fit.option != "LS") {
-        tabPanel("",
-          tags$hr(),
-          
-          h4("Robust Controls 2"),
-          
-          selectInput("linRegress.family2", "Family",
-                      choices = c("Bi-square" = "bisquare",
-                                  "Opt."      = "optimal",
-                                  "Mod. Opt." = "modified.optimal"),
-                      selected = "modified.optimal"),
-          
-          numericInput("linRegress.eff2", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01)
-        )
-      } else {
-        tabPanel("",
-          tags$hr(),
-          
-          h4("Robust Controls"),
-          
-          selectInput("linRegress.family", "Family",
-                      choices = c("Bi-square" = "bisquare",
-                                  "Opt."      = "optimal",
-                                  "Mod. Opt." = "modified.optimal"),
-                      selected = "modified.optimal"),
-          
-          numericInput("linRegress.eff", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01)
-        )
-      }
+      tabPanel("",
+        tags$hr(),
+        
+        h4("Robust Controls 2"),
+        
+        selectInput("linRegress.family2", "Family",
+                    choices = c("Bi-square" = "bisquare",
+                                "Opt."      = "optimal",
+                                "Mod. Opt." = "modified.optimal"),
+                    selected = "modified.optimal"),
+        
+        numericInput("linRegress.eff2", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01)
+      )
     }
   })
   
@@ -768,7 +827,7 @@ shinyServer(function(input, output) {
         
           fit[[2]] <- do.call(model[2], list(as.formula(input$linRegress.formula.text2),
                                              data    = values$dat,
-                                             control = control2))
+                                             control = control))
         }
           
         fit[[2]]$call <- call(model[2], as.formula(input$linRegress.formula.text2))
@@ -1724,7 +1783,7 @@ shinyServer(function(input, output) {
       return("")
     }
     
-    selectInput("covariance.variables", "variables",
+    selectInput("covariance.variables", "Variables",
                 choices  = values$dat.numeric.variables,
                 selected = values$dat.numeric.variables,
                 multiple = TRUE)
@@ -1933,13 +1992,14 @@ shinyServer(function(input, output) {
         
         # data.frame with xy coordinates
         all <- lapply(1:nrow(grid),
-                      function(i) {
+                      function(i, data) {
                         xcol <- grid[i, "x"]
                         ycol <- grid[i, "y"]
                         data.frame(xvar = names(data)[ycol], yvar = names(data)[xcol],
                                    i = grid[i, "x"], j = grid[i, "y"],
-                                   x = data[, xcol], y = data[, ycol])
-                      })
+                                   x = as.vector(data[, xcol]), y = as.vector(data[, ycol]))
+                      },
+                      data)
         
         all <- do.call("rbind", all)
         
@@ -2561,7 +2621,7 @@ shinyServer(function(input, output) {
       return("")
     }
     
-    selectInput("pca.variables", "variables",
+    selectInput("pca.variables", "Variables",
                 choices  = values$dat.numeric.variables,
                 selected = values$dat.numeric.variables,
                 multiple = TRUE)
@@ -2692,7 +2752,9 @@ shinyServer(function(input, output) {
   
   output$about.text <- renderText({"
     <div>
-      <font color=\"#000000\"> Text for this section to be added on a later date. </font>
+      <font color=\"#000000\"> Text for this section to be added on a later date. 
+        Please see the <a href=\"https://github.com/GregoryBrownson/RobStatTM-GUI/blob/master/vignette/RobStatTM%20GUI_vignette.pdf\">vignette</a>
+        for more information.</font>
     </div>
   "})
   

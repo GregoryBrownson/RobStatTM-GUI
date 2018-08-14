@@ -1112,6 +1112,7 @@ shinyServer(function(input, output) {
       
         plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
                         ggtitle(title.name) +
+                        xlab("Index") +
                         ylab("Standardized Residuals") +
                         geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                         geom_line()
@@ -1122,6 +1123,7 @@ shinyServer(function(input, output) {
       
         plots[[i]] <- ggplot(data = dat, aes(x = X, y = Y)) +
                         ggtitle(title.name) +
+                        xlab("Index") +
                         ylab("Robustly Standardized Residuals") +
                         geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                         geom_line()
@@ -1411,6 +1413,7 @@ shinyServer(function(input, output) {
         
           plt <- ggplot(data = dat, aes(x = X, y = Y)) + 
                    ggtitle(title.name) +
+                   xlab("Index") +
                    ylab("Standardized Residuals") +
                    geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                    geom_line()
@@ -1421,6 +1424,7 @@ shinyServer(function(input, output) {
         
           plt <- ggplot(data = dat, aes(x = X, y = Y)) + 
                    ggtitle(title.name) +
+                   xlab("Index") +
                    ylab("Robustly Standardized Residuals") +
                    geom_point(color = "dodgerblue2", shape = 18, size = 2) +
                    geom_line()

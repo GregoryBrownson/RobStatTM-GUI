@@ -699,8 +699,8 @@ shinyServer(function(input, output) {
             selectInput("linRegress.family", "Family",
                         choices = c("Bi-square" = "bisquare",
                                     "Opt."      = "optimal",
-                                    "Mod. Opt." = "modified.optimal"),
-                        selected = "modified.optimal"),
+                                    "Mod. Opt." = "modopt"),
+                        selected = "modopt"),
             
             numericInput("linRegress.eff", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01)
           )
@@ -713,8 +713,8 @@ shinyServer(function(input, output) {
             selectInput("linRegress.family", "Family",
                         choices = c("Bi-square" = "bisquare",
                                     "Opt."      = "optimal",
-                                    "Mod. Opt." = "modified.optimal"),
-                        selected = "modified.optimal"),
+                                    "Mod. Opt." = "modopt"),
+                        selected = "modopt"),
             
             numericInput("linRegress.eff", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01)
           )
@@ -728,8 +728,8 @@ shinyServer(function(input, output) {
           selectInput("linRegress.family", "Family",
                       choices = c("Bi-square" = "bisquare",
                                   "Opt."      = "optimal",
-                                  "Mod. Opt." = "modified.optimal"),
-                      selected = "modified.optimal"),
+                                  "Mod. Opt." = "modopt"),
+                      selected = "modopt"),
           
           numericInput("linRegress.eff", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01)
         )
@@ -747,8 +747,8 @@ shinyServer(function(input, output) {
         selectInput("linRegress.family2", "Family",
                     choices = c("Bi-square" = "bisquare",
                                 "Opt."      = "optimal",
-                                "Mod. Opt." = "modified.optimal"),
-                    selected = "modified.optimal"),
+                                "Mod. Opt." = "modopt"),
+                    selected = "modopt"),
         
         numericInput("linRegress.eff2", "Efficiency", value = 0.99, min = 0.80, max = 0.99, step = 0.01)
       )

@@ -697,7 +697,7 @@ shinyServer(function(input, output) {
             h4("Robust Controls 1"),
             
             selectInput("linRegress.family", "Family",
-                        choices = c("Bi-square" = "bisquare",
+                        choices = c("Bisquare" = "bisquare",
                                     "Opt."      = "optimal",
                                     "Mod. Opt." = "modopt"),
                         selected = "modopt"),
@@ -711,7 +711,7 @@ shinyServer(function(input, output) {
             h4("Robust Controls"),
             
             selectInput("linRegress.family", "Family",
-                        choices = c("Bi-square" = "bisquare",
+                        choices = c("Bisquare" = "bisquare",
                                     "Opt."      = "optimal",
                                     "Mod. Opt." = "modopt"),
                         selected = "modopt"),
@@ -726,7 +726,7 @@ shinyServer(function(input, output) {
           h4("Robust Controls"),
           
           selectInput("linRegress.family", "Family",
-                      choices = c("Bi-square" = "bisquare",
+                      choices = c("Bisquare" = "bisquare",
                                   "Opt."      = "optimal",
                                   "Mod. Opt." = "modopt"),
                       selected = "modopt"),
@@ -745,7 +745,7 @@ shinyServer(function(input, output) {
         h4("Robust Controls 2"),
         
         selectInput("linRegress.family2", "Family",
-                    choices = c("Bi-square" = "bisquare",
+                    choices = c("Bisquare" = "bisquare",
                                 "Opt."      = "optimal",
                                 "Mod. Opt." = "modopt"),
                     selected = "modopt"),

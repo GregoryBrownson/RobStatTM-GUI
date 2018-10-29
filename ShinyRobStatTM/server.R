@@ -456,7 +456,7 @@ shinyServer(function(input, output) {
     if (input$locScale.method == 'robust') {
       est <- locScaleM(x     = data,
                        psi   = input$locScale.psi,
-                       eff   = input$locScale.eff)
+                       eff   = as.numeric(input$locScale.eff))
       line1 <- paste0("<font color=\"#000000\">Location <strong>(SE)</strong>: ", round(est$mu, 4), " (<strong>", round(est$std.mu, 4), ")</strong><br>")
       line2 <- paste0("&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Scale: ", round(est$disper, 4),"</font>")
 
@@ -486,7 +486,7 @@ shinyServer(function(input, output) {
       
       est2 <- locScaleM(x     = data,
                         psi   = input$locScale.psi,
-                        eff   = input$locScale.eff)
+                        eff   = as.numeric(input$locScale.eff))
       
       line1 <- paste0("<font color=\"#000000\">Comparison of Location <strong>(SE)</strong>:<br>Classical&emsp;",
                       signif(est1$mu, 3), " (<strong>", signif(est1$std.mu, 3), ")</strong><br>Robust&nbsp;&nbsp;&nbsp;&emsp;",
